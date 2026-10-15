@@ -19,8 +19,8 @@ class StarterEnvironment implements Environment {
   done() { return this.#finished; }
 }
 export const benchmark = defineBenchmark({
-  id: "benchmark-ranking-stability", name: "Ranking Stability", tagline: "How much does a model ranking move with seed, prompt and sample?", tags: ["helpful","viral"], category: "other",
-  whatItMeasures: "How much does a model ranking move with seed, prompt and sample?", version: "0.1.0", status: "alpha", loadTasks,
+  id: "benchmark-ranking-stability", name: "Ranking Stability", tagline: "Measure ranking movement across seeds, prompts, and task samples.", tags: ["helpful","viral","science"], category: "model-evaluation",
+  whatItMeasures: "How model rankings move when the seed, prompt wording, or task sample changes.", version: "0.1.0", status: "alpha", loadTasks,
   async grade(task, submission, context) {
     if (task.kind === "single") return submission.answer === undefined ? { score: 0, reason: "Submission has no answer." } : exactMatch(task.expected ?? null, submission.answer);
     const state = await replay(new StarterEnvironment(), task, submission.toolLog ?? [], context.seed) as { finished?: boolean };
@@ -32,10 +32,10 @@ export const benchmark = defineBenchmark({
     bad: (task) => task.kind === "episode" ? [{ content: "Skipped the tool." }] : [],
   },
   provenance: [{
-    name: "Seeded starter task generator", kind: "synthetic", url: "https://github.com/pooriaarab/benchmark-ranking-stability/blob/main/scripts/gen-tasks.mjs",
-    licence: "MIT", howToGet: "Run `node scripts/gen-tasks.mjs` from the repository root.", retrievedAt: "2026-10-15T00:00:00.000Z",
-    contaminationNotes: "Public starter tasks generated with seed 20261015. Keep final evaluation tasks in a separately seeded hidden split.",
-    refresh: "Change the seed, run the generator, and review the JSONL diff.",
+    name: "Seeded synthetic reasoning bank (Mode B; Mode A uses only user-supplied reports)", kind: "synthetic", url: "https://github.com/pooriaarab/benchmark-ranking-stability/blob/main/scripts/gen-tasks.mjs",
+    licence: "MIT", howToGet: "Run `node scripts/gen-tasks.mjs --seed 20261015 --split public`. Mode A reads the RunReport files supplied on its command line and downloads no data.", retrievedAt: "2026-10-15T00:00:00.000Z",
+    contaminationNotes: "The 300 public prompt variants use seed 20261015 and are visible in the package. Generate the uncommitted hidden split with a private seed after the 2026-10-15 cutoff.",
+    refresh: "Quarterly, choose a new seed, generate both splits, review the public JSONL diff, and keep the hidden seed and file outside version control.",
   }],
   gradingMethod: "Exact match for single answers; deterministic state replay for episodes.",
 });
