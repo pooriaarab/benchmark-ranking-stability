@@ -21,5 +21,7 @@ if (args[0] === "score-stability") {
     console.log(JSON.stringify(result, null, 2));
   } catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
 } else {
-  process.exitCode = await createCli(benchmark, { bin: "benchmark-ranking-stability" }).main(args);
+  const delegated = args[0] === "run" && args.includes("--provider") && args[args.indexOf("--provider") + 1] === "mock" && !args.includes("--model")
+    ? [...args, "--model", "offline"] : args;
+  process.exitCode = await createCli(benchmark, { bin: "benchmark-ranking-stability" }).main(delegated);
 }

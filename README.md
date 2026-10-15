@@ -2,165 +2,227 @@
 
 [![npm](https://img.shields.io/npm/v/benchmark-ranking-stability)](https://www.npmjs.com/package/benchmark-ranking-stability) [![downloads](https://img.shields.io/npm/dm/benchmark-ranking-stability)](https://www.npmjs.com/package/benchmark-ranking-stability) [![license](https://img.shields.io/npm/l/benchmark-ranking-stability)](./LICENSE) [![types](https://img.shields.io/badge/TypeScript-types-3178c6)](#sdk)
 
-[AI Benchmark Index](https://aibenchmarkindex.com/benchmarks/benchmark-ranking-stability) · [npm](https://www.npmjs.com/package/benchmark-ranking-stability) · [API](#http-api) · [MCP](#model-context-protocol)
+[AI Benchmark Index](https://aibenchmarkindex.com/benchmarks/benchmark-ranking-stability) · [npm](https://www.npmjs.com/package/benchmark-ranking-stability) · [SDK](#sdk) · [HTTP API](#http-api) · [MCP](#model-context-protocol)
 
-benchmark-ranking-stability is an open-source AI model benchmark for other tasks. It measures this behavior: How much does a model ranking move with seed, prompt and sample?
+benchmark-ranking-stability is an open-source model evaluation benchmark. It shows how rankings change across task samples, prompt wording, and repeated runs.
 
 ```bash
-npx benchmark-ranking-stability run --model offline --provider mock --json
+npx benchmark-ranking-stability run --provider mock --json
 ```
 
 ```json
-{"model":"mock:1","mean":0.5,"totals":{"tasks":2,"passed":1,"failed":0}}
+{"model":"mock:1","mean":0.5,"confidenceInterval95":{"low":0.44333333333333336,"high":0.5566666666666666},"totals":{"tasks":300,"passed":150,"failed":0}}
 ```
 
-The starter data comes from a committed seeded generator. Seed 20261015 reproduces the public tasks.
+The mock deliberately mixes correct and wrong answers. The 300 public tasks come from a committed seeded generator: 60 reasoning items with five paraphrases each.
+
+Run a real model through OpenRouter:
+
+```bash
+OPENROUTER_API_KEY=your_key npx benchmark-ranking-stability run --provider openrouter --model openai/gpt-5-mini --json
+```
 
 ## Install
 
-benchmark-ranking-stability requires Node.js 20 or newer.
+Node.js 20 or newer is required.
 
 ```bash
 npm install benchmark-ranking-stability
 ```
 
-## Run your first benchmark
+## Measure ranking stability
 
-The mock provider needs no key or network access.
+Mode A is free and offline. Pass reports from at least two models:
 
 ```bash
-npx benchmark-ranking-stability run --model offline --provider mock
+npx benchmark-ranking-stability score-stability run-a.json run-b.json --seed 7 --svg volatility.svg
 ```
 
-A successful run prints two scored rows and a mean of 0.5.
+The command writes JSON statistics and a 1200×630 SVG. It bootstraps task rows and repeated reports with a fixed seed.
+
+Mode B runs the included suite. Run each model with several `--seed` values, then give every report to `score-stability`.
 
 ## How it works
 
 ```text
-tasks.jsonl -> model adapter -> deterministic grader -> report
-                         |-> CLI / SDK / MCP / HTTP API
+Mode A: RunReport files -> align task IDs -> bootstrap tasks and runs
+                                         -> rank intervals + tau-b + SVG
+
+Mode B: 60 items × 5 prompts -> model -> exact grader -> RunReport
 ```
 
-The runner keeps task order and records score, reason, latency, retries, usage, and cost when available.
+The stability result reports:
+
+- `meanKendallTau`: average agreement between the baseline and resampled rankings. One is stable; lower values mean more movement.
+- `probabilityFirst`: the share of resamples where a model ranks first. Tied models split that resample.
+- `rankInterval95`: the central 95% of bootstrapped ranks.
+- `mean`: the model's mean task score across its supplied reports.
+
+Read intervals and first-place probabilities together. A small mean gap can coexist with uncertain rank order.
 
 ## Why it exists
 
-General model leaderboards do not isolate other behavior. This package keeps the task data, grading rules, and provenance together for inspection.
+A leaderboard position can look exact when its underlying task and prompt choices are not. This package makes that sensitivity visible from ordinary benchmark reports.
+
+The implementation builds on [Kendall's treatment of rank ties](https://doi.org/10.1093/biomet/33.3.239) and [Efron's bootstrap](https://doi.org/10.1214/aos/1176344552). It does not claim a new statistical estimator.
 
 ## Compare
 
 Checked on 2026-10-15.
 
-| Property | benchmark-ranking-stability | General chat leaderboard | Ad hoc prompt test |
-| --- | --- | --- | --- |
-| Target | How much does a model ranking move with seed, prompt and sample? | Broad model quality | One local example |
-| Grading | Deterministic code | Varies | Manual |
-| Offline run | Mock provider | Varies | Varies |
-| Provenance | Package record | Varies | Usually absent |
+| Property | benchmark-ranking-stability | lm-evaluation-harness | Inspect AI | Chatbot Arena |
+| --- | --- | --- | --- | --- |
+| Main scope | Ranking sensitivity | Model task evaluation | Evaluation framework | Hosted pairwise preference ranking |
+| Accepts existing reports | Yes, family RunReport JSON | No family format | No family format | No |
+| Seeded rank bootstrap | Tasks and repeated runs | Not this package's workflow | User-defined analysis | Service-defined |
+| Included task suite | 300 synthetic prompt variants | Many external tasks | User-selected tasks | User prompts |
+| Deployment | Local CLI, SDK, MCP, HTTP | Local runner | Local runner | Managed website |
 
 ## Coverage
 
-| Surface | Status |
+| Surface | Included behavior |
 | --- | --- |
-| single tasks | Included |
-| SDK | Included |
-| CLI | Included |
-| MCP server | Included |
-| HTTP API | Included |
+| Offline analysis | Multiple reports per model, shared-task alignment, fixed-seed bootstrap |
+| Own suite | 60 items across six reasoning families, five prompt forms each |
+| Grading | Full-answer deterministic match after trim and Unicode normalization |
+| Output | JSON statistics and a 1200×630 volatility SVG |
+| Runtime | SDK, CLI, Model Context Protocol, and fetch-style HTTP API |
 
-The E2E gate checks every listed surface against the package source.
+The E2E gate runs all 300 tasks and every HTTP and MCP operation. It also checks four weak answer policies.
 
 ## Common use cases
 
-1. **Model developers:** compare adapters with the same seeded tasks.
-2. **Agent developers:** inspect task-level failures before changing prompts.
-3. **Release teams:** run the mock gate before publishing a data update.
-4. **Researchers:** export per-task scores for a reproducible analysis.
+1. **Evaluation teams:** test whether a release winner survives task resampling.
+2. **Model teams:** compare prompt variants before publishing a benchmark claim.
+3. **Researchers:** attach rank intervals to repeated OpenRouter runs.
+4. **Reviewers:** audit a ranking with fixed seeds and local report files.
+5. **Benchmark authors:** find task samples that reverse close model rankings.
 
 ## Features
 
-- **Deterministic grading:** Each row includes a score and reason.
-- **Reproducible data:** A committed seeded script creates the public tasks.
-- **Share cards:** The `card` command writes a 1200×630 SVG.
-- **Provenance:** Code and Markdown carry the same source record.
+- **Two modes:** analyze existing reports or run the included reasoning suite.
+- **Reproducible statistics:** fixed seeds control 2,000 bootstrap resamples by default.
+- **Tie handling:** Kendall tau-b and average ranks retain tied scores.
+- **Inspectable data:** JSON Lines tasks and their generator ship in the package.
+- **Adversarial gate:** empty, random, always-yes, and repeated answers must score below 0.10.
+- **Shareable output:** volatility and benchmark cards are plain SVG files.
 
 ## SDK
 
 ```ts
-import { benchmark, run, score } from "benchmark-ranking-stability";
+import { benchmark, run, score, scoreStabilityFiles } from "benchmark-ranking-stability";
+
+const result = await scoreStabilityFiles(
+  ["run-a.json", "run-b.json"],
+  { seed: 7, resamples: 2000, svgPath: "volatility.svg" },
+);
 ```
 
-`run(adapter, options)` creates a report. `score(taskId, submission)` grades one trace.
+`benchmark` exposes task metadata. `run(adapter, options)` runs Mode B. `score(taskId, submission)` applies its deterministic grader.
 
 ## CLI
 
-Commands are `list`, `show`, `run`, `score`, `card`, `provenance`, `index-entry`, `serve`, and `mcp`. Pass `--json` for machine-readable output.
+The standard commands are `list`, `show`, `run`, `score`, `card`, `provenance`, `index-entry`, `serve`, and `mcp`. This package also adds `score-stability` for Mode A.
+
+Use `run --provider mock` without a key. Use `--provider openrouter` with `OPENROUTER_API_KEY`, or `--provider openai` with `OPENAI_BASE_URL` and `OPENAI_API_KEY`.
 
 ## Model Context Protocol
 
-Start the MCP stdio server:
+Start the Model Context Protocol (MCP) server over standard input and output:
 
 ```bash
 npx benchmark-ranking-stability mcp
 ```
 
-Tools are `list_tasks`, `get_task`, `score_answer`, `run_benchmark`, and `get_provenance`.
+Its tools are `list_tasks`, `get_task`, `score_answer`, `run_benchmark`, and `get_provenance`.
 
 ## HTTP API
 
-Import `handler` from `benchmark-ranking-stability/api`, or run `npx benchmark-ranking-stability serve`. Routes are `GET /health`, `GET /v1/tasks`, `GET /v1/tasks/:id`, `POST /v1/score`, `GET /v1/provenance`, and `GET /v1/index-entry`.
+Import `handler` from `benchmark-ranking-stability/api`, or start the self-hosted Node server:
+
+```bash
+npx benchmark-ranking-stability serve 3000
+```
+
+Routes are `GET /health`, `GET /v1/tasks`, `GET /v1/tasks/:id`, `POST /v1/score`, `GET /v1/provenance`, and `GET /v1/index-entry`.
 
 ## Data provenance
 
-`data/tasks.jsonl` contains the public tasks. `data/PROVENANCE.md` names the generator, seed, licence, cutoff, and refresh steps. Run `npm run generate:tasks` to rebuild tasks and `npm run provenance` after a build.
+`scripts/gen-tasks.mjs` creates all Mode B data under the MIT license. Seed `20261015` reproduces the committed public split.
 
-## Limits
+```bash
+node scripts/gen-tasks.mjs --seed 20261015 --split public
+node scripts/gen-tasks.mjs --seed YOUR_PRIVATE_SEED --split hidden
+```
 
-The starter tasks prove package wiring, not model quality. Replace them before publishing a real benchmark. Public tasks can enter training data. Keep a separately seeded hidden split for final comparisons. Remote providers can add cost and retain prompts under their own policies.
+The hidden command writes to ignored `artifacts/hidden-tasks.jsonl`. Keep that seed and file outside version control. Refreshes happen quarterly after a reviewed public diff.
+
+Mode A downloads no dataset. It reads only the RunReport files named on the command line. See [`data/PROVENANCE.md`](data/PROVENANCE.md) for the machine-aligned record.
+
+## Limits and known weaknesses
+
+- Exact matching rejects equivalent forms such as `12.0` for `12`.
+- Public tasks can enter training data. Use a privately seeded split for final claims.
+- Five paraphrases of one item are correlated observations, not five independent facts.
+- Small samples and ties can produce wide rank intervals or low-information rankings.
+- Reports use the intersection of task IDs. Missing rows can shrink the effective sample.
+- Different benchmark versions, graders, or provider settings can invalidate a comparison.
+- Bootstrap results describe the supplied reports. They do not cover every future prompt.
+- The synthetic suite covers six compact reasoning families, not broad model quality.
+
+The package has no public leaderboard yet. No real-model results are published because none were run for this release.
 
 ## Integration guides
 
-- [TypeScript SDK integration](#sdk)
-- [Model Context Protocol integration](#model-context-protocol)
-- [HTTP API integration](#http-api)
+- [Task grading and statistical assumptions](docs/grading.md)
+- [Data source and refresh record](data/PROVENANCE.md)
+- [TypeScript SDK](#sdk)
+- [Model Context Protocol](#model-context-protocol)
+- [HTTP API](#http-api)
 
 ## Status
 
-Version 0.1.0 is alpha. Task schemas and grading may change before 1.0. Report defects through the GitHub issue tracker. Public case studies are not yet published.
+Version 0.1.0 is alpha. Schemas and statistical output can change before 1.0. Report defects through [GitHub Issues](https://github.com/pooriaarab/benchmark-ranking-stability/issues).
+
+Public case studies are not yet published.
 
 ## FAQ
 
 ### What does benchmark-ranking-stability measure?
 
-benchmark-ranking-stability measures this behavior: How much does a model ranking move with seed, prompt and sample? The committed grader defines the exact pass conditions.
+benchmark-ranking-stability measures rank movement under resampled tasks, repeated runs, and prompt variants. It reports agreement, first-place probability, and rank intervals.
 
-### Can benchmark-ranking-stability run offline?
+### Can benchmark-ranking-stability analyze another benchmark?
 
-benchmark-ranking-stability runs end to end with the mock provider and no key. Real model runs need a configured provider.
+benchmark-ranking-stability accepts RunReport JSON from any package in the benchmark family. Reports need model names, task IDs, and finite scores from zero to one.
 
-### Which providers work?
+### Does benchmark-ranking-stability run offline?
 
-benchmark-ranking-stability supports OpenRouter, an OpenAI-compatible base URL, and the offline mock adapter through benchmark-core.
+benchmark-ranking-stability runs Mode A and the mock Mode B path without network access. Real model calls need an OpenRouter or OpenAI-compatible endpoint.
 
-### Does benchmark-ranking-stability provide a hosted service?
+### How many reports should I collect?
 
-benchmark-ranking-stability provides a server you run. It does not provide a managed benchmark service.
+benchmark-ranking-stability accepts one report per model, but repeated runs let it resample run-to-run variation. More shared tasks and runs usually make the diagnostic more informative.
 
-### Where do the tasks come from?
+### How does benchmark-ranking-stability handle ties?
 
-benchmark-ranking-stability ships seeded synthetic starter tasks. The provenance file explains how to reproduce and refresh them.
+benchmark-ranking-stability assigns average ranks to equal means. First-place ties split probability equally, and ranking agreement uses Kendall tau-b.
 
-### How are answers graded?
+### Does benchmark-ranking-stability provide a managed service?
 
-benchmark-ranking-stability uses exact match for single answers and simulator replay for episode traces. Model judging is off.
+benchmark-ranking-stability provides software you run. The HTTP server is self-hosted and has no built-in authentication.
 
-### How is this different from a general leaderboard?
+### Is the included suite a general intelligence test?
 
-benchmark-ranking-stability measures one named behavior with inspectable tasks and grading. General leaderboards combine broader capabilities.
+benchmark-ranking-stability uses a narrow synthetic suite to expose prompt sensitivity. It does not measure every capability or produce a universal model rank.
 
-### Can I use a hidden split?
+### How is benchmark-ranking-stability different from lm-evaluation-harness?
 
-benchmark-ranking-stability supports the same schema for public and hidden tasks. Keep hidden data outside the npm package and public repository.
+benchmark-ranking-stability focuses on uncertainty in a ranking and can consume existing family reports. lm-evaluation-harness focuses on running a broad task catalog.
+
+### Why is there no public model leaderboard?
+
+benchmark-ranking-stability has no verified real-model runs for version 0.1.0. The project does not invent or extrapolate scores.
 
 ## License
 
