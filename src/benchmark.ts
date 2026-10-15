@@ -10,7 +10,7 @@ export const benchmark = defineBenchmark({
   id: "benchmark-ranking-stability", name: "Ranking Stability", tagline: "Measure ranking movement across seeds, prompts, and task samples.", tags: ["helpful","viral","science"], category: "model-evaluation",
   whatItMeasures: "How model rankings move when the seed, prompt wording, or task sample changes.", version: "0.1.0", status: "alpha", loadTasks,
   grade(task, submission) {
-    if (submission.answer === undefined) return { score: 0, reason: "Submission has no answer." };
+    if (typeof submission.answer !== "string") return { score: 0, reason: "Submission has no answer." };
     const pass = typeof task.expected === "string" && normalize(submission.answer) === normalize(task.expected);
     return { score: pass ? 1 : 0, reason: pass ? "Answer matches after whitespace and Unicode normalization." : "Answer does not match the generated answer key." };
   },
