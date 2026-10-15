@@ -6,3 +6,6 @@ export async function score(taskId: string, submission: Trace) {
   const task = await benchmark.getTask(taskId); if (!task) throw new Error(`Task not found: ${taskId}`);
   return benchmark.score(task, submission);
 }
+
+export { kendallTauB, renderVolatilityChart, scoreStabilityFiles } from "./stability.js";
+export type { ModelStability, StabilityOptions, StabilityResult } from "./stability.js";
