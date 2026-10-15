@@ -1,0 +1,19 @@
+# benchmark-ranking-stability
+
+> How much does a model ranking move with seed, prompt and sample?
+
+Package: https://www.npmjs.com/package/benchmark-ranking-stability
+Repository: https://github.com/pooriaarab/benchmark-ranking-stability
+Directory: https://aibenchmarkindex.com/benchmarks/benchmark-ranking-stability
+
+## Exports
+
+The root exports `benchmark`, `run`, and `score`. `benchmark-ranking-stability/api` exports the fetch-style `handler`. `benchmark-ranking-stability/mcp` exports MCP builders.
+
+## Commands
+
+The CLI supports list, show, run, score, card, provenance, index-entry, serve, and mcp. Use the mock provider for offline verification.
+
+## Verification
+
+Run `npm run ci:local`. The report is `artifacts/e2e-report.json`.
