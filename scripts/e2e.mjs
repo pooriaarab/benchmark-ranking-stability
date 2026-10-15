@@ -10,7 +10,7 @@ const execFile = promisify(execFileCallback);
 const cli = (...args) => execFile(process.execPath, ["dist/cli.js", ...args], { maxBuffer: 4_000_000 });
 
 await execFile("npm", ["run", "build"]); await mkdir("artifacts", { recursive: true });
-const runResult = await cli("run", "--model", "offline", "--provider", "mock", "--json");
+const runResult = await cli("run", "--provider", "mock", "--json");
 const report = JSON.parse(runResult.stdout); assert.equal(report.rows.length, 300);
 assert.ok(report.rows.some((row) => row.score === 1)); assert.ok(report.rows.some((row) => row.score === 0));
 await writeFile("artifacts/mock-report.json", `${JSON.stringify(report)}\n`);
