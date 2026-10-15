@@ -27,4 +27,4 @@ Ways the statistics can mislead:
 - Bootstrap resampling describes the supplied sample, not all future prompts.
 - Correlated prompt variants make uncertainty look smaller than independent tasks would.
 
-The command rejects malformed reports, duplicate model labels, fewer than two models, no shared tasks, and non-finite scores. Treat the SVG as a diagnostic, not a universal leaderboard.
+The command rejects malformed reports, duplicate task IDs within one report, fewer than two models, no shared tasks, and non-finite scores. Treat the SVG as a diagnostic, not a universal leaderboard.
