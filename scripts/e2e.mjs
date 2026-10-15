@@ -23,6 +23,7 @@ async function policyMean(answer) {
 const graderPolicies = {
   good: await policyMean((task) => task.expected), empty: await policyMean(() => ""),
   random: await policyMean(() => "z9-random-wrong"), alwaysYes: await policyMean(() => "yes"), sameAnswer: await policyMean(() => "1"),
+  nullAnswer: await policyMean(() => null), numberAnswer: await policyMean(() => 12), arrayAnswer: await policyMean(() => ["1"]),
 };
 assert.equal(graderPolicies.good, 1);
 for (const [name, mean] of Object.entries(graderPolicies).filter(([name]) => name !== "good")) assert.ok(mean < 0.1, `${name} scored ${mean}`);
