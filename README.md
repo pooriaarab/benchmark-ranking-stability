@@ -137,7 +137,7 @@ Start the Model Context Protocol (MCP) server over standard input and output:
 npx benchmark-ranking-stability mcp
 ```
 
-Its tools are `list_tasks`, `get_task`, `score_answer`, `run_benchmark`, and `get_provenance`. `run_benchmark` accepts an optional `tasksPath` and returns the report with the same `breakdown`.
+Its tools are `list_tasks`, `get_task`, `score_answer`, `run_benchmark`, and `get_provenance`. `run_benchmark` returns the report with the same `breakdown`; pass `provider: "mock"` for a keyless offline run, and start the server as `mcp --tasks <path>` to serve a split file.
 
 ## HTTP API
 
