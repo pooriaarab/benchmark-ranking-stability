@@ -158,7 +158,7 @@ node scripts/gen-tasks.mjs --seed 20261015 --split public
 node scripts/gen-tasks.mjs --seed YOUR_PRIVATE_SEED --split hidden
 ```
 
-The hidden command writes `hid-`-prefixed tasks to ignored `artifacts/hidden-tasks.jsonl` and defaults to an unpublished seed when `--seed` is omitted. Keep the file outside version control and run it with `--tasks artifacts/hidden-tasks.jsonl`. Refreshes happen quarterly after a reviewed public diff.
+The hidden command writes `hid-`-prefixed tasks to ignored `artifacts/hidden-tasks.jsonl` and refuses to run without an explicit private `--seed`. Keep the file outside version control and run it with `--tasks artifacts/hidden-tasks.jsonl`. Refreshes happen quarterly after a reviewed public diff.
 
 Mode A downloads no dataset. It reads only the RunReport files named on the command line. See [`data/PROVENANCE.md`](data/PROVENANCE.md) for the machine-aligned record.
 
