@@ -91,7 +91,7 @@ Checked on 2026-10-15.
 | Output | JSON statistics and a 1200×630 volatility SVG |
 | Runtime | SDK, CLI, Model Context Protocol, and fetch-style HTTP API |
 
-The E2E gate runs all 300 tasks and every HTTP and MCP operation. It also checks weak policies: empty, constants, refusal, a repeated tool call, and a first-name heuristic must each score below 0.10.
+The E2E gate runs all 300 tasks and every HTTP and MCP operation. It also checks weak policies: empty, constants, refusal, a repeated tool call, and a first-name heuristic must each score below 0.10, and answering with the first or last number in the prompt must stay below 0.10 in every family.
 
 ## Common use cases
 
@@ -164,8 +164,8 @@ Mode A downloads no dataset. It reads only the RunReport files named on the comm
 
 ## Limits and known weaknesses
 
-- The grader reads the last number or last mentioned option as the answer; a stray trailing value can be misread.
-- Public tasks can enter training data. Use a privately seeded split for final claims.
+- The grader reads the first number token or an order-cued option mention as the answer; a stray value or name can be misread.
+- Public tasks can enter training data. Use a privately seeded split for final claims. The hidden split stays hidden only while its seed is private and its prompts are not served publicly; anyone who learns the seed or sees the prompts can rebuild it.
 - Five paraphrases of one item are correlated observations, so `score-stability` resamples items, not task rows.
 - Small samples and ties can produce wide rank intervals or low-information rankings.
 - Reports use the intersection of task IDs. Missing rows can shrink the effective sample.

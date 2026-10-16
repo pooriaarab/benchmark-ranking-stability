@@ -8,19 +8,19 @@ Each Mode B task has one generated answer. The grader normalizes the submission 
 - The last balanced `{...}` JSON object is used when one is present; keys named `answer`, `result`, `final`, `value`, or `output` (or a single-key object) supply the answer.
 - Text is normalized for case, Unicode form (NFKC), whitespace, quotes, and trailing punctuation.
 - Numeric keys compare the first number token in the answer; `$`, `,`, `%`, and currency symbols are ignored, so `42`, `$42.00`, and `42 dollars` agree.
-- Ordering tasks carry `metadata.options`; the pass check takes the last option name mentioned, so `Ari finished first.` and `The winner is Ari` both score.
+- Ordering tasks carry `metadata.options`. When the answer carries an order cue (`first`, `ahead`, `before`, `won`, `beats`, `leads`, `fastest`, `winner`), the check takes the option named nearest the cue on the winning side, so `Ari finished first, ahead of Bo` and `The winner is Ari` both score; without a cue the last option name mentioned wins, so `Bo finished behind Ari` also scores.
 - Empty or non-string answers score 0.
 
 Ways this grader can fail:
 
-- A leaked public answer key can turn recall into an apparent reasoning success. The hidden split (`hid-` prefix, unpublished seed) exists for that reason; keep it outside version control. Hidden task metadata carries no seed, so a served task cannot reveal how to regenerate the split, and the generator redraws until no hidden question matches a public one.
+- A leaked public answer key can turn recall into an apparent reasoning success. The hidden split (`hid-` prefix, unpublished seed) exists for that reason; keep it outside version control. Hidden task metadata carries no seed, so a served task cannot reveal how to regenerate the split, and the generator redraws until no hidden question matches a public one. The hidden split stays hidden only while its seed is private and its prompts are not served publicly: the generator accepts seeds up to 2^53-1, but anyone who learns the seed can rebuild the file, and anyone served the prompts already has the tasks.
 - Prose that mentions the expected value for the wrong reason still scores. The last-mention rule also credits a guess that happens to land on the key.
 - Numbers embedded in a longer explanation are read as the answer; the first number token is treated as final, so a worked example placed before the answer can be misread.
 - Generator mistakes become authoritative until a human reviews the task diff.
 - The six synthetic families cover only a narrow slice of reasoning.
 - MCP `score_answer.submission` is an open object schema in benchmark-core, so OpenAI strict tool mode may reject it; the shape is documented upstream, not here.
 
-The E2E gate submits empty text, constant answers, a refusal, a repeated tool call, and a first-name heuristic to every task. Each policy must remain below 0.10 mean score. A direct answer-key policy must score 1.00.
+The E2E gate submits empty text, constant answers, a refusal, a repeated tool call, and a first-name heuristic to every task. Each policy must remain below 0.10 mean score. Two further policies answer with the first and the last number printed in each prompt; both must stay below 0.10 in every family, not only overall. A direct answer-key policy must score 1.00, and the ordering phrasings above must each score 1.00.
 
 ## Ranking analysis
 

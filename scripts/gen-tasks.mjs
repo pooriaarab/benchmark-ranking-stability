@@ -9,15 +9,18 @@ if (split === "hidden" && !process.argv.includes("--seed")) {
   throw new Error("The hidden split requires an explicit private --seed; never commit it.");
 }
 const seed = Number(option("seed", "20261015"));
-if (!Number.isInteger(seed) || !["public", "hidden"].includes(split)) {
-  throw new Error("Usage: gen-tasks.mjs [--seed INTEGER] [--split public|hidden]");
+if (!Number.isSafeInteger(seed) || seed < 0 || !["public", "hidden"].includes(split)) {
+  throw new Error("Usage: gen-tasks.mjs [--seed INTEGER 0..2^53-1] [--split public|hidden]");
 }
-function mulberry32(value) {
+const STATE_MASK = 0xffffffffffffffffn;
+function splitmix64(value) {
+  let state = BigInt(value) & STATE_MASK;
   return () => {
-    value |= 0; value = value + 0x6d2b79f5 | 0;
-    let out = Math.imul(value ^ value >>> 15, 1 | value);
-    out = out + Math.imul(out ^ out >>> 7, 61 | out) ^ out;
-    return ((out ^ out >>> 14) >>> 0) / 4294967296;
+    state = (state + 0x9e3779b97f4a7c15n) & STATE_MASK;
+    let out = state;
+    out = ((out ^ (out >> 30n)) * 0xbf58476d1ce4e5b9n) & STATE_MASK;
+    out = ((out ^ (out >> 27n)) * 0x94d049bb133111ebn) & STATE_MASK;
+    return Number((out ^ (out >> 31n)) >> 11n) / 9007199254740992;
   };
 }
 const PUBLIC_SEED = 20261015;
@@ -62,20 +65,32 @@ function buildItems(random) {
     items.push({ family: "set-counting", question: `A group has ${onlyA} people who chose only tea, ${onlyB} who chose only coffee, and ${shared} who chose both. How many chose tea or coffee?`, answer: String(onlyA + onlyB + shared) });
   }
   for (let index = 0; index < 10; index++) {
-    const start = integer(12, 40) + index; const threshold = integer(4, 9); const first = start % 2 === 0 ? start / 2 : start + threshold;
-    const result = first > threshold * 2 ? first - threshold : first + threshold;
-    items.push({ family: "rule-tracing", question: `Let x be ${start}. If x is even, halve it; otherwise add ${threshold}. Then, if x is greater than ${threshold * 2}, subtract ${threshold}; otherwise add ${threshold}. What is x?`, answer: String(result) });
+    const start = integer(12, 40) + index; const threshold = integer(4, 9); let adjust = integer(3, 12);
+    const first = start % 2 === 0 ? start / 2 : start + threshold;
+    let result = 0;
+    for (;;) {
+      result = first > threshold * 2 ? first - adjust : first + adjust;
+      const printed = new Set([start, threshold, threshold * 2, adjust]);
+      if (adjust !== threshold && !printed.has(result)) break;
+      adjust += 1;
+    }
+    items.push({ family: "rule-tracing", question: `Let x be ${start}. If x is even, halve it; otherwise add ${threshold}. Then, if x is greater than ${threshold * 2}, subtract ${adjust}; otherwise add ${adjust}. What is x?`, answer: String(result) });
+  }
+  for (const item of items) {
+    if (item.family !== "rule-tracing") continue;
+    const printed = new Set((item.question.match(/\d+/g) ?? []).map(Number));
+    if (printed.has(Number(item.answer))) throw new Error(`rule-tracing answer ${item.answer} is printed in its prompt: ${item.question}`);
   }
   return items;
 }
-const bankSeed = seed ^ (split === "hidden" ? 0x5eed5eed : 0);
-let items = buildItems(mulberry32(bankSeed));
+const bankSeed = (BigInt(seed) ^ (split === "hidden" ? 0x5eed5eed5eed5eedn : 0n)) & STATE_MASK;
+let items = buildItems(splitmix64(bankSeed));
 if (split === "hidden") {
-  const publicQuestions = new Set(buildItems(mulberry32(PUBLIC_SEED)).map((item) => item.question));
+  const publicQuestions = new Set(buildItems(splitmix64(BigInt(PUBLIC_SEED))).map((item) => item.question));
   let salt = 0;
   while (items.some((item) => publicQuestions.has(item.question))) {
     salt += 1;
-    items = buildItems(mulberry32(bankSeed ^ (salt * 0x9e3779b9)));
+    items = buildItems(splitmix64((bankSeed ^ (BigInt(salt) * 0x9e3779b97f4a7c15n)) & STATE_MASK));
   }
 }
 const prefix = split === "hidden" ? "hid" : "reason";
