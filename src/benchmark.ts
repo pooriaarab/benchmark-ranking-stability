@@ -16,7 +16,7 @@ export function createBenchmark(options: BenchmarkTasksOptions = {}): Benchmark<
     provenance: [{
       name: "Seeded synthetic reasoning bank (Mode B; Mode A uses only user-supplied reports)", kind: "synthetic", url: "https://github.com/pooriaarab/benchmark-ranking-stability/blob/main/scripts/gen-tasks.mjs",
       licence: "MIT", howToGet: "Run `node scripts/gen-tasks.mjs --seed 20261015 --split public`. Mode A reads the RunReport files supplied on its command line and downloads no data.", retrievedAt: "2026-10-15T00:00:00.000Z",
-      contaminationNotes: "The 300 public prompt variants use seed 20261015 and are visible in the package. The hidden split uses the `hid-` id prefix and an unpublished default seed; keep its seed and file outside version control.",
+      contaminationNotes: "The 300 public prompt variants use seed 20261015 and are visible in the package. The hidden split uses the `hid-` id prefix and requires an explicit private `--seed`; keep its seed and file outside version control.",
       refresh: "Quarterly, choose a new seed, generate both splits, review the public JSONL diff, and keep the hidden seed and file outside version control.",
     }],
     gradingMethod: "Deterministic answer match after stripping one code fence, taking the last JSON object when present, and normalizing case, whitespace, money and units; name answers match the last option mentioned.",
