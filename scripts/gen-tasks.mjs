@@ -23,6 +23,14 @@ function splitmix64(value) {
     return Number((out ^ (out >> 31n)) >> 11n) / 9007199254740992;
   };
 }
+function mulberry32(value) {
+  return () => {
+    value |= 0; value = value + 0x6d2b79f5 | 0;
+    let out = Math.imul(value ^ value >>> 15, 1 | value);
+    out = out + Math.imul(out ^ out >>> 7, 61 | out) ^ out;
+    return ((out ^ out >>> 14) >>> 0) / 4294967296;
+  };
+}
 const PUBLIC_SEED = 20261015;
 const names = ["Ari", "Bo", "Cy", "Dee", "Eli", "Fay", "Gus", "Han", "Ivo", "Joy", "Kai", "Lux", "Moe", "Nia", "Ola", "Pim"];
 const variants = [
@@ -83,10 +91,10 @@ function buildItems(random) {
   }
   return items;
 }
-const bankSeed = (BigInt(seed) ^ (split === "hidden" ? 0x5eed5eed5eed5eedn : 0n)) & STATE_MASK;
-let items = buildItems(splitmix64(bankSeed));
+const bankSeed = (BigInt(seed) ^ 0x5eed5eed5eed5eedn) & STATE_MASK;
+let items = buildItems(split === "hidden" ? splitmix64(bankSeed) : mulberry32(seed));
 if (split === "hidden") {
-  const publicQuestions = new Set(buildItems(splitmix64(BigInt(PUBLIC_SEED))).map((item) => item.question));
+  const publicQuestions = new Set(buildItems(mulberry32(PUBLIC_SEED)).map((item) => item.question));
   let salt = 0;
   while (items.some((item) => publicQuestions.has(item.question))) {
     salt += 1;
