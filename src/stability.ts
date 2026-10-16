@@ -116,6 +116,7 @@ export async function scoreStabilityFiles(paths: string[], options: StabilityOpt
   if (!Number.isInteger(seed) || !Number.isInteger(resamples) || resamples < 100 || resamples > 100_000) throw new Error("Seed must be an integer and resamples must be from 100 to 100000.");
   const warnings: string[] = [];
   if (taskIds.length < MIN_SHARED_TASKS) warnings.push(`Only ${taskIds.length} shared tasks (< ${MIN_SHARED_TASKS}); rank intervals, first-place probabilities, and tau are unreliable at this size.`);
+  if (clusters.length < MIN_SHARED_TASKS) warnings.push(`Only ${clusters.length} shared items (< ${MIN_SHARED_TASKS}); the bootstrap resamples items, so a low item count means the resamples barely vary.`);
   if ([...groups.values()].every((runs) => runs.length === 1)) warnings.push("Each model has a single run; resampling covers the task sample but not run-to-run variation.");
   if (resamples < 500) warnings.push("Fewer than 500 resamples; the tails of the rank intervals are noisy.");
   const random = mulberry32(seed); const sampledRanks = models.map(() => [] as number[]); const firstCounts = models.map(() => 0); let tau = 0;
