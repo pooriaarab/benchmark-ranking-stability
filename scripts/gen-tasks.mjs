@@ -84,7 +84,7 @@ const tasks = items.flatMap((item, itemIndex) => variants.map((render, variantIn
   kind: "single",
   prompt: render(item.question),
   expected: item.answer,
-  metadata: { source: "seeded-synthetic", split, item: itemIndex + 1, variant: variantIndex + 1, family: item.family, ...(split === "public" ? { seed } : {}), ...(item.options ? { options: item.options } : {}) },
+  metadata: { source: "seeded-synthetic", ...(split === "public" ? { seed } : {}), split, item: itemIndex + 1, variant: variantIndex + 1, family: item.family, ...(item.options ? { options: item.options } : {}) },
 })));
 const path = split === "public" ? "data/tasks.jsonl" : "artifacts/hidden-tasks.jsonl";
 await mkdir(path.split("/")[0], { recursive: true });
