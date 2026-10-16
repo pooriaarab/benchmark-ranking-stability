@@ -13,6 +13,8 @@ await execFile("npm", ["run", "build"]); await mkdir("artifacts", { recursive: t
 const runResult = await cli("run", "--provider", "mock", "--json");
 const report = JSON.parse(runResult.stdout); assert.equal(report.rows.length, 300);
 assert.ok(report.rows.some((row) => row.score === 1)); assert.ok(report.rows.some((row) => row.score === 0));
+assert.equal(Object.keys(report.breakdown?.byFamily ?? {}).length, 6, "run report must carry the family breakdown");
+assert.deepEqual(Object.keys(report.breakdown?.byVariant ?? {}), ["v1", "v2", "v3", "v4", "v5"], "run report must carry the variant breakdown");
 await writeFile("artifacts/mock-report.json", `${JSON.stringify(report)}\n`);
 
 const { benchmark } = await import("../dist/index.js"); const tasks = await benchmark.listTasks();
@@ -58,8 +60,26 @@ const leakedScores = await Promise.all(hiddenTasks.map(async (task, index) => (a
 const leakedMean = leakedScores.reduce((sum, score) => sum + score, 0) / leakedScores.length;
 assert.ok(leakedMean < 0.5, `public answer key scored ${leakedMean} on hidden tasks`);
 
+const hiddenRun = JSON.parse((await cli("run", "--provider", "mock", "--tasks", "artifacts/hidden-tasks.jsonl", "--json")).stdout);
+assert.equal(hiddenRun.rows.length, 300);
+assert.ok(hiddenRun.rows.every((row) => row.taskId.startsWith("hid-")), "run --tasks must read the split file");
+assert.ok(hiddenRun.breakdown?.byVariant?.v5, "hidden run report must carry the variant breakdown");
+const listHidden = JSON.parse((await cli("list", "--tasks", "artifacts/hidden-tasks.jsonl", "--json")).stdout);
+assert.ok(listHidden.tasks.every((task) => task.id.startsWith("hid-")), "list --tasks must read the split file");
+const { run: sdkRun } = await import("../dist/index.js");
+const { mockAdapter } = await import("benchmark-core");
+const sdkHidden = await sdkRun(mockAdapter(), { tasksPath: "artifacts/hidden-tasks.jsonl" });
+assert.ok(sdkHidden.rows.every((row) => row.taskId.startsWith("hid-")), "SDK run tasksPath must read the split file");
+assert.ok(sdkHidden.breakdown.byVariant.v5, "SDK run report must carry the variant breakdown");
+const { createApi } = await import("../dist/api.js");
+const apiResponse = await createApi({ tasksPath: "artifacts/hidden-tasks.jsonl" })(new Request("http://local/v1/tasks"));
+assert.equal(apiResponse.status, 200);
+assert.ok((await apiResponse.json()).tasks.every((task) => task.id.startsWith("hid-")), "createApi tasksPath must read the split file");
+
 await cli("list", "--json"); await cli("show", "reason-01-v1", "--json");
-await cli("score", "artifacts/mock-report.json", "--json"); await cli("card", "artifacts/mock-report.json", "artifacts/card.svg");
+const rescored = JSON.parse((await cli("score", "artifacts/mock-report.json", "--json")).stdout);
+assert.ok(rescored.breakdown?.byFamily?.ordering, "score output must carry the family breakdown");
+await cli("card", "artifacts/mock-report.json", "artifacts/card.svg");
 await cli("provenance", "--json"); const entry = JSON.parse((await cli("index-entry", "--json")).stdout); assert.equal(entry.task_count, 300);
 const stabilityReports = [
   { model: "model-a", rows: report.rows.map((row, index) => ({ taskId: row.taskId, score: index % 10 < 8 ? 1 : 0 })) },
