@@ -75,6 +75,33 @@ for (const row of visibleRows) { const bucket = visibleByFamily[row.family] ??= 
 const visibleMean = visibleRows.reduce((sum, row) => sum + row.score, 0) / visibleRows.length;
 assert.equal(visibleMean, 1, `visible-information policy scored ${visibleMean}`);
 
+const numberPolicyMeans = { first: {}, last: {} };
+await Promise.all(tasks.map(async (task) => {
+  const printed = (task.prompt.match(/\d+/g) ?? []).map(Number);
+  for (const [name, value] of [["first", printed[0]], ["last", printed[printed.length - 1]]]) {
+    const score = value === undefined ? 0 : (await benchmark.score(task, { answer: String(value) })).score;
+    const bucket = numberPolicyMeans[name][task.metadata.family] ??= { scored: 0, tasks: 0 };
+    bucket.tasks += 1; bucket.scored += score;
+  }
+}));
+for (const [name, families] of Object.entries(numberPolicyMeans)) {
+  for (const [family, bucket] of Object.entries(families)) {
+    assert.ok(bucket.scored / bucket.tasks < 0.1, `${name}-number policy scored ${bucket.scored / bucket.tasks} in ${family}`);
+  }
+}
+
+const orderingTasks = tasks.filter((task) => task.metadata.family === "ordering");
+const otherOption = (task) => task.metadata.options.find((name) => name !== task.expected);
+const orderingPhrasings = {
+  cuedFirst: (task) => `${task.expected} finished first, ahead of ${otherOption(task)}.`,
+  cuedBefore: (task) => `${task.expected} finished before ${otherOption(task)}.`,
+  trailingMention: (task) => `${otherOption(task)} finished behind ${task.expected}.`,
+};
+for (const [name, make] of Object.entries(orderingPhrasings)) {
+  const scores = await Promise.all(orderingTasks.map(async (task) => (await benchmark.score(task, { answer: make(task) })).score));
+  assert.equal(scores.reduce((sum, score) => sum + score, 0) / scores.length, 1, `ordering phrasing ${name} must score 1`);
+}
+
 assert.equal(graderPolicies.good, 1);
 for (const name of ["fenced", "proseWrapped", "jsonWrapped", "checked"]) assert.equal(graderPolicies[name], 1, `${name} scored ${graderPolicies[name]}`);
 for (const [name, mean] of Object.entries(graderPolicies).filter(([name]) => !["good", "fenced", "proseWrapped", "jsonWrapped", "checked"].includes(name))) assert.ok(mean < 0.1, `${name} scored ${mean}`);
@@ -214,7 +241,8 @@ try {
   assert.ok(mcpHiddenTasks.every((task) => !("seed" in (task.metadata ?? {}))), "MCP-served hidden tasks must not carry the split seed");
 } finally { await hiddenClient.close(); }
 
-const artifact = { task_count: report.rows.length, scores: report.rows.map((row) => row.score), grader_policies: graderPolicies, visible_policy: Object.fromEntries(Object.entries(visibleByFamily).map(([family, bucket]) => [family, `${bucket.solved}/${bucket.tasks}`])), hidden_split: { tasks: hiddenTasks.length, public_key_mean: leakedMean, visible_mean: hiddenVisibleMean }, stability: { models: stability.models.length, shared_tasks: stability.sharedTasks }, route_status_codes: routes, tool_names: toolNames };
+const numberPolicyReport = Object.fromEntries(Object.entries(numberPolicyMeans).map(([name, families]) => [`${name}_number`, Object.fromEntries(Object.entries(families).map(([family, bucket]) => [family, `${bucket.scored}/${bucket.tasks}`]))]));
+const artifact = { task_count: report.rows.length, scores: report.rows.map((row) => row.score), grader_policies: graderPolicies, visible_policy: Object.fromEntries(Object.entries(visibleByFamily).map(([family, bucket]) => [family, `${bucket.solved}/${bucket.tasks}`])), prompt_number_policies: numberPolicyReport, hidden_split: { tasks: hiddenTasks.length, public_key_mean: leakedMean, visible_mean: hiddenVisibleMean }, stability: { models: stability.models.length, shared_tasks: stability.sharedTasks }, route_status_codes: routes, tool_names: toolNames };
 await writeFile("artifacts/e2e-report.json", `${JSON.stringify(artifact, null, 2)}\n`);
 assert.match(await readFile("data/PROVENANCE.md", "utf8"), /Seeded synthetic reasoning bank/);
 console.log(`e2e: ${artifact.task_count} tasks, ${Object.keys(routes).length} routes, ${toolNames.length} tools, visible policy solved ${visibleMean * 300}/300 public and ${hiddenVisibleMean * 300}/300 hidden, adversarial grading and stability -> all surfaces passed, ok`);

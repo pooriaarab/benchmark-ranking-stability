@@ -68,6 +68,24 @@ function lastMention(text: string, choices: string[]): string | undefined {
   return best;
 }
 
+function firstMention(text: string, choices: string[]): string | undefined {
+  let best: string | undefined; let position = Number.POSITIVE_INFINITY;
+  for (const choice of choices) {
+    const at = text.search(new RegExp(`\\b${choice.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`));
+    if (at >= 0 && at < position) { position = at; best = choice; }
+  }
+  return best;
+}
+
+const ORDER_CUE = /\b(first|ahead|before|won|beats?|leads?|fastest|winner)\b/;
+
+function mentionedName(text: string, choices: string[]): string | undefined {
+  const cue = ORDER_CUE.exec(text);
+  if (!cue) return lastMention(text, choices);
+  if (cue[0] === "winner") return firstMention(text.slice(cue.index), choices) ?? lastMention(text, choices);
+  return lastMention(text.slice(0, cue.index), choices) ?? firstMention(text, choices);
+}
+
 export function gradeAnswer(task: Task, answer: unknown): TaskScore {
   const details: Record<string, JsonValue> = { family: task.metadata?.family ?? "unknown", item: task.metadata?.item ?? 0, variant: task.metadata?.variant ?? 0 };
   const fail = (reason: string): TaskScore => ({ score: 0, reason, details });
@@ -81,6 +99,6 @@ export function gradeAnswer(task: Task, answer: unknown): TaskScore {
   const expectedNumber = parseNumber(wanted);
   const pass = expectedNumber !== undefined
     ? firstNumber(candidate) === expectedNumber
-    : got === wanted || lastMention(got, (optionsOf(task) ?? [expected]).map(normalize)) === wanted;
+    : got === wanted || mentionedName(got, (optionsOf(task) ?? [expected]).map(normalize)) === wanted;
   return { score: pass ? 1 : 0, reason: pass ? "Answer matches after normalization." : "Answer does not match the generated answer key.", details };
 }
