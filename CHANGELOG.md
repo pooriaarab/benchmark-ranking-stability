@@ -9,4 +9,4 @@ Scoring and analysis fixes from an independent deep review. Scores from 0.1.0 ar
 - `score-stability` pairs each bootstrap resample across models and resamples paraphrase items instead of individual task rows. Tau, first-place probabilities, and rank intervals differ from 0.1.0 output.
 - New output: `warnings`, `sharedItems`, and `promptSensitivity` in stability results; `breakdown` of means by family and variant on run and score reports.
 - New input: `--tasks <path>` on the CLI, `tasksPath` on the SDK `run`, `createApi`, and the MCP `run_benchmark` tool, so a hidden split file can be run.
-- The hidden split uses the `hid-` id prefix and an unpublished default seed.
+- The hidden split uses the `hid-` id prefix and refuses to generate without an explicit private `--seed`.

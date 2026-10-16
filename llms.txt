@@ -24,4 +24,4 @@ The mock provider works offline. OpenRouter uses `OPENROUTER_API_KEY`. An OpenAI
 
 ## Data and verification
 
-Public data seed: 20261015. Generate a hidden split with `node scripts/gen-tasks.mjs --seed N --split hidden`; it writes `hid-`-prefixed tasks to ignored `artifacts/hidden-tasks.jsonl` and defaults to an unpublished seed. Run `npm run ci:local`; its report is `artifacts/e2e-report.json`. Version 0.2.0; scores from 0.1.0 are not comparable.
+Public data seed: 20261015. Generate a hidden split with `node scripts/gen-tasks.mjs --seed N --split hidden`; it writes `hid-`-prefixed tasks to ignored `artifacts/hidden-tasks.jsonl` and requires an explicit private seed. Run `npm run ci:local`; its report is `artifacts/e2e-report.json`. Version 0.2.0; scores from 0.1.0 are not comparable.
