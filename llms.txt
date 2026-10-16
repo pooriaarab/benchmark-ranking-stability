@@ -10,18 +10,18 @@ Directory: https://private-repo-337e.com/benchmarks/benchmark-ranking-stability
 
 Mode A: `score-stability` reads two or more benchmark-family RunReport files. It writes Kendall tau-b, first-place probabilities, 95% rank intervals, and an SVG.
 
-Mode B: 60 seeded synthetic reasoning items each have five prompt variants. The exact grader trims whitespace and normalizes Unicode.
+Mode B: 60 seeded synthetic reasoning items each have five prompt variants. The deterministic grader strips one code fence, takes the last JSON object, and normalizes case, whitespace, money, and units; ordering answers match the last option name mentioned.
 
 ## Exports
 
-The root exports `benchmark`, `run`, `score`, `kendallTauB`, `renderVolatilityChart`, and `scoreStabilityFiles`. The `/api` export provides a fetch-style handler. The `/mcp` export provides MCP builders.
+The root exports `benchmark`, `createBenchmark`, `run`, `score`, `reportBreakdown`, `kendallTauB`, `renderVolatilityChart`, and `scoreStabilityFiles`. The `/api` export provides `handler` and `createApi`. The `/mcp` export provides MCP builders.
 
 ## Commands
 
-Commands: list, show, run, score, score-stability, card, provenance, index-entry, serve, mcp.
+Commands: list, show, run, score, score-stability, card, provenance, index-entry, serve, mcp. `--tasks <path>` selects a split file such as `artifacts/hidden-tasks.jsonl`.
 
 The mock provider works offline. OpenRouter uses `OPENROUTER_API_KEY`. An OpenAI-compatible endpoint uses `OPENAI_BASE_URL` and `OPENAI_API_KEY`.
 
 ## Data and verification
 
-Public data seed: 20261015. Generate a hidden split with `node scripts/gen-tasks.mjs --seed N --split hidden`. Run `npm run ci:local`; its report is `artifacts/e2e-report.json`.
+Public data seed: 20261015. Generate a hidden split with `node scripts/gen-tasks.mjs --seed N --split hidden`; it writes `hid-`-prefixed tasks to ignored `artifacts/hidden-tasks.jsonl` and requires an explicit private seed. Run `npm run ci:local`; its report is `artifacts/e2e-report.json`. Version 0.2.0; scores from 0.1.0 are not comparable.
