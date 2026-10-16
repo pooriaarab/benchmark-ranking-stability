@@ -6,8 +6,12 @@ export interface BenchmarkTasksOptions { tasksPath?: string }
 
 export function createBenchmark(options: BenchmarkTasksOptions = {}): Benchmark<Task> {
   async function loadTasks(): Promise<Task[]> {
-    const text = await readFile(options.tasksPath ?? new URL("../data/tasks.jsonl", import.meta.url), "utf8");
-    return text.trim().split("\n").map((line) => JSON.parse(line) as Task);
+    const source = options.tasksPath ?? new URL("../data/tasks.jsonl", import.meta.url);
+    const text = await readFile(source, "utf8");
+    return text.trim().split("\n").map((line, index) => {
+      try { return JSON.parse(line) as Task; }
+      catch { throw new Error(`Invalid JSONL in task file at line ${index + 1}.`); }
+    });
   }
   return defineBenchmark({
     id: "benchmark-ranking-stability", name: "Ranking Stability", tagline: "Measure ranking movement across seeds, prompts, and task samples.", tags: ["helpful","viral","science"], category: "model-evaluation",

@@ -152,7 +152,18 @@ try {
   assert.deepEqual(toolNames, ["get_provenance", "get_task", "list_tasks", "run_benchmark", "score_answer"]);
   const calls = [["list_tasks", {}], ["get_task", { taskId: "reason-01-v1" }], ["score_answer", { taskId: "reason-01-v1", submission: report.rows[0].submission }], ["get_provenance", {}], ["run_benchmark", { model: "offline" }]];
   for (const [name, args] of calls) { const result = await client.callTool({ name, arguments: args }); if (name === "run_benchmark") assert.equal(result.isError, true); else assert.notEqual(result.isError, true); }
+  const mcpRun = await client.callTool({ name: "run_benchmark", arguments: { model: "offline", provider: "mock" } });
+  assert.notEqual(mcpRun.isError, true);
+  const mcpReport = JSON.parse(mcpRun.content[0].text);
+  assert.equal(mcpReport.rows.length, 300); assert.ok(mcpReport.breakdown?.byVariant?.v5, "MCP run_benchmark must carry the breakdown");
 } finally { await client.close(); }
+
+const hiddenTransport = new StdioClientTransport({ command: process.execPath, args: ["dist/cli.js", "mcp", "--tasks", "artifacts/hidden-tasks.jsonl"], cwd: process.cwd(), stderr: "pipe" });
+const hiddenClient = new Client({ name: "benchmark-ranking-stability-e2e-hidden", version: "0.2.0" }); await hiddenClient.connect(hiddenTransport);
+try {
+  const hiddenList = await hiddenClient.callTool({ name: "list_tasks", arguments: {} });
+  assert.ok(JSON.parse(hiddenList.content[0].text).tasks.every((task) => task.id.startsWith("hid-")), "mcp --tasks must serve the split file");
+} finally { await hiddenClient.close(); }
 
 const artifact = { task_count: report.rows.length, scores: report.rows.map((row) => row.score), grader_policies: graderPolicies, hidden_split: { tasks: hiddenTasks.length, public_key_mean: leakedMean }, stability: { models: stability.models.length, shared_tasks: stability.sharedTasks }, route_status_codes: routes, tool_names: toolNames };
 await writeFile("artifacts/e2e-report.json", `${JSON.stringify(artifact, null, 2)}\n`);
