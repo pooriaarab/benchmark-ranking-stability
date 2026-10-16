@@ -16,17 +16,47 @@ assert.ok(report.rows.some((row) => row.score === 1)); assert.ok(report.rows.som
 await writeFile("artifacts/mock-report.json", `${JSON.stringify(report)}\n`);
 
 const { benchmark } = await import("../dist/index.js"); const tasks = await benchmark.listTasks();
-async function policyMean(answer) {
-  const scores = await Promise.all(tasks.map(async (task) => (await benchmark.score(task, { answer: answer(task) })).score));
+async function policyMean(make) {
+  const scores = await Promise.all(tasks.map(async (task) => (await benchmark.score(task, make(task))).score));
   return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
+const firstNamedOption = (task) => {
+  let best = ""; let position = Number.POSITIVE_INFINITY;
+  for (const name of Array.isArray(task.metadata?.options) ? task.metadata.options : []) {
+    const at = task.prompt.indexOf(name); if (at >= 0 && at < position) { position = at; best = name; }
+  }
+  return best;
+};
 const graderPolicies = {
-  good: await policyMean((task) => task.expected), empty: await policyMean(() => ""),
-  random: await policyMean(() => "z9-random-wrong"), alwaysYes: await policyMean(() => "yes"), sameAnswer: await policyMean(() => "1"),
-  nullAnswer: await policyMean(() => null), numberAnswer: await policyMean(() => 12), arrayAnswer: await policyMean(() => ["1"]),
+  good: await policyMean((task) => ({ answer: task.expected })),
+  fenced: await policyMean((task) => ({ answer: `\`\`\`\n${task.expected}\n\`\`\`` })),
+  proseWrapped: await policyMean((task) => ({ answer: `The answer is ${task.expected}.` })),
+  jsonWrapped: await policyMean((task) => ({ answer: JSON.stringify({ answer: task.expected }) })),
+  empty: await policyMean(() => ({ answer: "" })),
+  zero: await policyMean(() => ({ answer: "0" })),
+  one: await policyMean(() => ({ answer: "1" })),
+  fortyTwo: await policyMean(() => ({ answer: "42" })),
+  constantName: await policyMean(() => ({ answer: "Ari" })),
+  alwaysYes: await policyMean(() => ({ answer: "yes" })),
+  alwaysRefuse: await policyMean(() => ({ answer: "I cannot help with that request." })),
+  sameToolCall: await policyMean(() => ({ toolLog: [{ name: "noop", args: {}, result: null }] })),
+  firstName: await policyMean((task) => ({ answer: firstNamedOption(task) })),
+  nullAnswer: await policyMean(() => ({ answer: null })),
+  numberAnswer: await policyMean(() => ({ answer: 12 })),
+  arrayAnswer: await policyMean(() => ({ answer: ["1"] })),
 };
 assert.equal(graderPolicies.good, 1);
-for (const [name, mean] of Object.entries(graderPolicies).filter(([name]) => name !== "good")) assert.ok(mean < 0.1, `${name} scored ${mean}`);
+for (const name of ["fenced", "proseWrapped", "jsonWrapped"]) assert.equal(graderPolicies[name], 1, `${name} scored ${graderPolicies[name]}`);
+for (const [name, mean] of Object.entries(graderPolicies).filter(([name]) => !["good", "fenced", "proseWrapped", "jsonWrapped"].includes(name))) assert.ok(mean < 0.1, `${name} scored ${mean}`);
+
+await execFile(process.execPath, ["scripts/gen-tasks.mjs", "--split", "hidden"]);
+const hiddenTasks = (await readFile("artifacts/hidden-tasks.jsonl", "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+assert.equal(hiddenTasks.length, tasks.length);
+assert.ok(hiddenTasks.every((task) => task.id.startsWith("hid-")), "hidden split needs the hid- prefix");
+assert.ok(hiddenTasks.every((task, index) => task.prompt !== tasks[index]?.prompt), "hidden prompts must differ from public");
+const leakedScores = await Promise.all(hiddenTasks.map(async (task, index) => (await benchmark.score(task, { answer: tasks[index].expected })).score));
+const leakedMean = leakedScores.reduce((sum, score) => sum + score, 0) / leakedScores.length;
+assert.ok(leakedMean < 0.5, `public answer key scored ${leakedMean} on hidden tasks`);
 
 await cli("list", "--json"); await cli("show", "reason-01-v1", "--json");
 await cli("score", "artifacts/mock-report.json", "--json"); await cli("card", "artifacts/mock-report.json", "artifacts/card.svg");
@@ -65,7 +95,7 @@ try {
   for (const [name, args] of calls) { const result = await client.callTool({ name, arguments: args }); if (name === "run_benchmark") assert.equal(result.isError, true); else assert.notEqual(result.isError, true); }
 } finally { await client.close(); }
 
-const artifact = { task_count: report.rows.length, scores: report.rows.map((row) => row.score), grader_policies: graderPolicies, stability: { models: stability.models.length, shared_tasks: stability.sharedTasks }, route_status_codes: routes, tool_names: toolNames };
+const artifact = { task_count: report.rows.length, scores: report.rows.map((row) => row.score), grader_policies: graderPolicies, hidden_split: { tasks: hiddenTasks.length, public_key_mean: leakedMean }, stability: { models: stability.models.length, shared_tasks: stability.sharedTasks }, route_status_codes: routes, tool_names: toolNames };
 await writeFile("artifacts/e2e-report.json", `${JSON.stringify(artifact, null, 2)}\n`);
 assert.match(await readFile("data/PROVENANCE.md", "utf8"), /Seeded synthetic reasoning bank/);
 console.log(`e2e: ${artifact.task_count} tasks, ${Object.keys(routes).length} routes, ${toolNames.length} tools, adversarial grading and stability -> all surfaces passed, ok`);

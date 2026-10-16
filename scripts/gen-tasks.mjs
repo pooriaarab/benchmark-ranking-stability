@@ -4,8 +4,8 @@ function option(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
   return index < 0 ? fallback : process.argv[index + 1];
 }
-const seed = Number(option("seed", "20261015"));
 const split = option("split", "public");
+const seed = Number(option("seed", split === "hidden" ? "7349917" : "20261015"));
 if (!Number.isInteger(seed) || !["public", "hidden"].includes(split)) {
   throw new Error("Usage: gen-tasks.mjs [--seed INTEGER] [--split public|hidden]");
 }
@@ -42,10 +42,16 @@ for (let index = 0; index < 10; index++) {
   const dividend = divisor * quotient + remainder;
   items.push({ family: "remainder", question: `What is the remainder when ${dividend} is divided by ${divisor}?`, answer: String(remainder) });
 }
-const names = ["Ari", "Bo", "Cy", "Dee", "Eli", "Fay", "Gus", "Han", "Ivo", "Joy", "Kai", "Lux", "Moe"];
+const names = ["Ari", "Bo", "Cy", "Dee", "Eli", "Fay", "Gus", "Han", "Ivo", "Joy", "Kai", "Lux", "Moe", "Nia", "Ola", "Pim"];
 for (let index = 0; index < 10; index++) {
-  const group = [names[index], names[index + 1], names[index + 2], names[index + 3]];
-  items.push({ family: "ordering", question: `${group[0]} finished before ${group[1]}. ${group[2]} finished after ${group[3]}. ${group[3]} finished after ${group[1]}. Who finished first?`, answer: group[0] });
+  const pool = [...names]; const order = [];
+  for (let pick = 0; pick < 4; pick++) order.push(pool.splice(Math.floor(random() * pool.length), 1)[0]);
+  const link = (ahead, behind) => random() < 0.5 ? `${ahead} finished before ${behind}.` : `${behind} finished after ${ahead}.`;
+  const clauses = [link(order[0], order[1]), link(order[1], order[2]), link(order[2], order[3])];
+  for (let place = clauses.length - 1; place > 0; place--) {
+    const swap = Math.floor(random() * (place + 1)); [clauses[place], clauses[swap]] = [clauses[swap], clauses[place]];
+  }
+  items.push({ family: "ordering", question: `${clauses.join(" ")} Who finished first? Answer with one name.`, answer: order[0], options: [...order].sort() });
 }
 for (let index = 0; index < 10; index++) {
   const shared = integer(2, 7); const onlyA = integer(3, 9); const onlyB = integer(4, 10);
@@ -56,12 +62,13 @@ for (let index = 0; index < 10; index++) {
   const result = first > threshold * 2 ? first - threshold : first + threshold;
   items.push({ family: "rule-tracing", question: `Let x be ${start}. If x is even, halve it; otherwise add ${threshold}. Then, if x is greater than ${threshold * 2}, subtract ${threshold}; otherwise add ${threshold}. What is x?`, answer: String(result) });
 }
+const prefix = split === "hidden" ? "hid" : "reason";
 const tasks = items.flatMap((item, itemIndex) => variants.map((render, variantIndex) => ({
-  id: `reason-${String(itemIndex + 1).padStart(2, "0")}-v${variantIndex + 1}`,
+  id: `${prefix}-${String(itemIndex + 1).padStart(2, "0")}-v${variantIndex + 1}`,
   kind: "single",
   prompt: render(item.question),
   expected: item.answer,
-  metadata: { source: "seeded-synthetic", seed, split, item: itemIndex + 1, variant: variantIndex + 1, family: item.family },
+  metadata: { source: "seeded-synthetic", seed, split, item: itemIndex + 1, variant: variantIndex + 1, family: item.family, ...(item.options ? { options: item.options } : {}) },
 })));
 const path = split === "public" ? "data/tasks.jsonl" : "artifacts/hidden-tasks.jsonl";
 await mkdir(path.split("/")[0], { recursive: true });
