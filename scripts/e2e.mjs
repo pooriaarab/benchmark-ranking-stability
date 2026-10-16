@@ -69,7 +69,46 @@ const stabilityReports = [
 for (const [index, value] of stabilityReports.entries()) await writeFile(`artifacts/stability-${index}.json`, JSON.stringify(value));
 const stability = JSON.parse((await cli("score-stability", ...stabilityReports.map((_, index) => `artifacts/stability-${index}.json`), "--resamples", "500", "--seed", "7", "--svg", "artifacts/volatility.svg")).stdout);
 assert.equal(stability.models[0].model, "model-a"); assert.equal(stability.sharedTasks, 300); assert.equal(stability.models.length, 3);
+assert.equal(stability.sharedItems, 60); assert.ok(stability.models[0].probabilityFirst > 0.9, `dominant model pFirst ${stability.models[0].probabilityFirst}`);
+assert.ok(Array.isArray(stability.warnings));
+assert.deepEqual(stability.promptSensitivity?.variants, [1, 2, 3, 4, 5]);
+assert.equal(stability.promptSensitivity?.perVariant.length, 5);
+assert.equal(stability.promptSensitivity?.rankRange.length, 3);
 assert.match(await readFile("artifacts/volatility.svg", "utf8"), /width="1200" height="630"/);
+
+const identical = [{ model: "same-a", rows: report.rows }, { model: "same-b", rows: report.rows }];
+for (const [index, value] of identical.entries()) await writeFile(`artifacts/same-${index}.json`, JSON.stringify(value));
+const sameResult = JSON.parse((await cli("score-stability", "artifacts/same-0.json", "artifacts/same-1.json", "--resamples", "500", "--seed", "11", "--svg", "artifacts/same.svg")).stdout);
+assert.ok(sameResult.meanKendallTau > 0.99, `identical models tau ${sameResult.meanKendallTau}`);
+for (const model of sameResult.models) assert.ok(Math.abs(model.probabilityFirst - 0.5) < 0.05, `identical model pFirst ${model.probabilityFirst}`);
+
+const dominant = [
+  { model: "always-first", rows: report.rows.map((row) => ({ taskId: row.taskId, score: 1 })) },
+  { model: "always-last", rows: report.rows.map((row) => ({ taskId: row.taskId, score: 0 })) },
+];
+for (const [index, value] of dominant.entries()) await writeFile(`artifacts/dominant-${index}.json`, JSON.stringify(value));
+const dominantResult = JSON.parse((await cli("score-stability", "artifacts/dominant-0.json", "artifacts/dominant-1.json", "--resamples", "500", "--seed", "13", "--svg", "artifacts/dominant.svg")).stdout);
+assert.equal(dominantResult.models[0].model, "always-first");
+assert.equal(dominantResult.models[0].probabilityFirst, 1);
+assert.deepEqual(dominantResult.models[0].rankInterval95, { low: 1, high: 1 });
+
+const tiny = [
+  { model: "tiny-a", rows: report.rows.slice(0, 10).map((row) => ({ taskId: row.taskId, score: 1 })) },
+  { model: "tiny-b", rows: report.rows.slice(0, 10).map((row) => ({ taskId: row.taskId, score: 0.5 })) },
+];
+for (const [index, value] of tiny.entries()) await writeFile(`artifacts/tiny-${index}.json`, JSON.stringify(value));
+const tinyResult = JSON.parse((await cli("score-stability", "artifacts/tiny-0.json", "artifacts/tiny-1.json", "--resamples", "500", "--seed", "17", "--svg", "artifacts/tiny.svg")).stdout);
+assert.equal(tinyResult.sharedTasks, 10); assert.ok(tinyResult.warnings.some((warning) => warning.includes("shared tasks")), `expected small-sample warning, got ${tinyResult.warnings}`);
+
+const tenModelReports = Array.from({ length: 10 }, (_, index) => ({ model: `m${index}`, rows: report.rows.map((row) => ({ taskId: row.taskId, score: index / 10 })) }));
+const tenFiles = [];
+for (const value of tenModelReports) { const file = `artifacts/ten-${value.model}.json`; await writeFile(file, JSON.stringify(value)); tenFiles.push(file); }
+await cli("score-stability", ...tenFiles, "--resamples", "200", "--seed", "19", "--svg", "artifacts/ten.svg");
+const tenSvg = await readFile("artifacts/ten.svg", "utf8");
+const coordinates = [...tenSvg.matchAll(/(?:x1|x2|cx|x)="(\d+(?:\.\d+)?)"/g)].map((match) => Number(match[1]));
+const heights = [...tenSvg.matchAll(/(?:y1|y2|cy|y)="(\d+(?:\.\d+)?)"/g)].map((match) => Number(match[1]));
+assert.ok(coordinates.every((value) => value <= 1200), "chart x overflow");
+assert.ok(heights.every((value) => value <= 630), "chart y overflow");
 
 const probe = createNetServer(); await new Promise((resolve) => probe.listen(0, "127.0.0.1", resolve));
 const address = probe.address(); assert.ok(address && typeof address === "object"); await new Promise((resolve) => probe.close(resolve));
