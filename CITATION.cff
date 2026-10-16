@@ -8,6 +8,7 @@ authors:
 version: "0.2.0"
 date-released: 2026-10-16
 license: MIT
+doi: 10.5281/zenodo.23422385
 repository-code: https://github.com/pooriaarab/benchmark-ranking-stability
 url: "https://aibenchmarkindex.com/benchmarks/benchmark-ranking-stability"
 abstract: "Bootstrap model ranking stability across task samples, repeated runs, and prompt variants."
