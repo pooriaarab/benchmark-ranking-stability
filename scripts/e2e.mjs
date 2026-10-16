@@ -49,7 +49,7 @@ assert.equal(graderPolicies.good, 1);
 for (const name of ["fenced", "proseWrapped", "jsonWrapped"]) assert.equal(graderPolicies[name], 1, `${name} scored ${graderPolicies[name]}`);
 for (const [name, mean] of Object.entries(graderPolicies).filter(([name]) => !["good", "fenced", "proseWrapped", "jsonWrapped"].includes(name))) assert.ok(mean < 0.1, `${name} scored ${mean}`);
 
-await execFile(process.execPath, ["scripts/gen-tasks.mjs", "--split", "hidden"]);
+await execFile(process.execPath, ["scripts/gen-tasks.mjs", "--seed", "424242", "--split", "hidden"]);
 const hiddenTasks = (await readFile("artifacts/hidden-tasks.jsonl", "utf8")).trim().split("\n").map((line) => JSON.parse(line));
 assert.equal(hiddenTasks.length, tasks.length);
 assert.ok(hiddenTasks.every((task) => task.id.startsWith("hid-")), "hidden split needs the hid- prefix");
