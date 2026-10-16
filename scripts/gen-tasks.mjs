@@ -5,7 +5,10 @@ function option(name, fallback) {
   return index < 0 ? fallback : process.argv[index + 1];
 }
 const split = option("split", "public");
-const seed = Number(option("seed", split === "hidden" ? "7349917" : "20261015"));
+if (split === "hidden" && !process.argv.includes("--seed")) {
+  throw new Error("The hidden split requires an explicit private --seed; never commit it.");
+}
+const seed = Number(option("seed", "20261015"));
 if (!Number.isInteger(seed) || !["public", "hidden"].includes(split)) {
   throw new Error("Usage: gen-tasks.mjs [--seed INTEGER] [--split public|hidden]");
 }
