@@ -1,15 +1,15 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { MAX_TOOL_LOG_ENTRIES, openrouterAdapter, run as coreRun, type Benchmark, type Task } from "benchmark-core";
-import { benchmark as defaultBenchmark, createBenchmark } from "./benchmark.js";
+import { MAX_TOOL_LOG_ENTRIES, mockAdapter, openrouterAdapter, run as coreRun, type Benchmark, type Task } from "benchmark-core";
+import { benchmark as defaultBenchmark } from "./benchmark.js";
 import { reportBreakdown } from "./report.js";
 
 const tools = [
   { name: "list_tasks", description: "List benchmark task ids and prompts.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   { name: "get_task", description: "Get one benchmark task.", inputSchema: { type: "object", properties: { taskId: { type: "string" } }, required: ["taskId"], additionalProperties: false } },
   { name: "score_answer", description: "Score a trace with the deterministic benchmark grader.", inputSchema: { type: "object", properties: { taskId: { type: "string" }, submission: { type: "object" }, seed: { type: "number" } }, required: ["taskId", "submission"], additionalProperties: false } },
-  { name: "run_benchmark", description: "Run every task through an OpenRouter model.", inputSchema: { type: "object", properties: { model: { type: "string" }, tasksPath: { type: "string" } }, required: ["model"], additionalProperties: false } },
+  { name: "run_benchmark", description: "Run every task through an OpenRouter model, or the offline mock when provider is mock.", inputSchema: { type: "object", properties: { model: { type: "string" }, provider: { type: "string", enum: ["openrouter", "mock"] } }, required: ["model"], additionalProperties: false } },
   { name: "get_provenance", description: "Get benchmark data provenance.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
 ];
 const content = (value: unknown, isError = false) => ({ content: [{ type: "text" as const, text: JSON.stringify(value) }], ...(isError ? { isError: true } : {}) });
@@ -36,10 +36,15 @@ export function createMcpServer(instance: Benchmark<Task> = defaultBenchmark) {
       }
       if (request.params.name === "run_benchmark") {
         if (typeof input.model !== "string") return content({ error: "model is required." }, true);
+        const provider = input.provider ?? "openrouter";
+        if (provider === "mock") {
+          const report = await coreRun(instance, mockAdapter({}));
+          return content({ ...report, breakdown: reportBreakdown(report, await instance.listTasks()) });
+        }
+        if (provider !== "openrouter") return content({ error: "provider must be openrouter or mock." }, true);
         if (!process.env.OPENROUTER_API_KEY) return content({ error: "OPENROUTER_API_KEY is required to run a benchmark." }, true);
-        const selected = typeof input.tasksPath === "string" ? createBenchmark({ tasksPath: input.tasksPath }) : instance;
-        const report = await coreRun(selected, openrouterAdapter({ model: input.model }));
-        return content({ ...report, breakdown: reportBreakdown(report, await selected.listTasks()) });
+        const report = await coreRun(instance, openrouterAdapter({ model: input.model }));
+        return content({ ...report, breakdown: reportBreakdown(report, await instance.listTasks()) });
       }
       if (request.params.name === "get_provenance") return content({ provenance: instance.definition.provenance });
       return content({ error: `Unknown tool: ${request.params.name}` }, true);
