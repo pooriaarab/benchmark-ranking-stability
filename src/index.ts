@@ -7,5 +7,5 @@ export async function score(taskId: string, submission: Trace) {
   return benchmark.score(task, submission);
 }
 
-export { kendallTauB, renderVolatilityChart, scoreStabilityFiles } from "./stability.js";
-export type { ModelStability, StabilityOptions, StabilityResult } from "./stability.js";
+export { kendallTauB, renderVolatilityChart, scoreStabilityFiles, MIN_SHARED_TASKS } from "./stability.js";
+export type { ModelStability, PromptSensitivity, StabilityOptions, StabilityResult, VariantRanking } from "./stability.js";
