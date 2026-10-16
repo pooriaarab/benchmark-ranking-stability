@@ -13,23 +13,136 @@ await execFile("npm", ["run", "build"]); await mkdir("artifacts", { recursive: t
 const runResult = await cli("run", "--provider", "mock", "--json");
 const report = JSON.parse(runResult.stdout); assert.equal(report.rows.length, 300);
 assert.ok(report.rows.some((row) => row.score === 1)); assert.ok(report.rows.some((row) => row.score === 0));
+assert.equal(Object.keys(report.breakdown?.byFamily ?? {}).length, 6, "run report must carry the family breakdown");
+assert.deepEqual(Object.keys(report.breakdown?.byVariant ?? {}), ["v1", "v2", "v3", "v4", "v5"], "run report must carry the variant breakdown");
 await writeFile("artifacts/mock-report.json", `${JSON.stringify(report)}\n`);
 
 const { benchmark } = await import("../dist/index.js"); const tasks = await benchmark.listTasks();
-async function policyMean(answer) {
-  const scores = await Promise.all(tasks.map(async (task) => (await benchmark.score(task, { answer: answer(task) })).score));
+async function policyMean(make) {
+  const scores = await Promise.all(tasks.map(async (task) => (await benchmark.score(task, make(task))).score));
   return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
-const graderPolicies = {
-  good: await policyMean((task) => task.expected), empty: await policyMean(() => ""),
-  random: await policyMean(() => "z9-random-wrong"), alwaysYes: await policyMean(() => "yes"), sameAnswer: await policyMean(() => "1"),
-  nullAnswer: await policyMean(() => null), numberAnswer: await policyMean(() => 12), arrayAnswer: await policyMean(() => ["1"]),
+const firstNamedOption = (task) => {
+  let best = ""; let position = Number.POSITIVE_INFINITY;
+  for (const name of Array.isArray(task.metadata?.options) ? task.metadata.options : []) {
+    const at = task.prompt.indexOf(name); if (at >= 0 && at < position) { position = at; best = name; }
+  }
+  return best;
 };
+function solveFromPrompt(prompt) {
+  let match;
+  if ((match = prompt.match(/Start with (\d+), multiply by (\d+), add (\d+), then subtract (\d+)\./))) return String(Number(match[1]) * Number(match[2]) + Number(match[3]) - Number(match[4]));
+  if ((match = prompt.match(/The sequence is ([\d, ]+)\./))) { const parts = match[1].split(",").map(Number); return String(parts[parts.length - 1] + parts[1] - parts[0]); }
+  if ((match = prompt.match(/remainder when (\d+) is divided by (\d+)/))) return String(Number(match[1]) % Number(match[2]));
+  if ((match = prompt.match(/has (\d+) people who chose only tea, (\d+) who chose only coffee, and (\d+) who chose both/))) return String(Number(match[1]) + Number(match[2]) + Number(match[3]));
+  if ((match = prompt.match(/Let x be (\d+)\. If x is even, halve it; otherwise add (\d+)\. Then, if x is greater than (\d+), subtract (\d+); otherwise add (\d+)\./))) {
+    let x = Number(match[1]); x = x % 2 === 0 ? x / 2 : x + Number(match[2]);
+    return String(x > Number(match[3]) ? x - Number(match[4]) : x + Number(match[5]));
+  }
+  const links = [...prompt.matchAll(/(\w+) finished (before|after) (\w+)\./g)];
+  if (links.length) {
+    const behind = new Map();
+    for (const [, a, rel, b] of links) {
+      const [ahead, loser] = rel === "before" ? [a, b] : [b, a];
+      behind.set(loser, (behind.get(loser) ?? 0) + 1); if (!behind.has(ahead)) behind.set(ahead, 0);
+    }
+    return [...behind.entries()].find(([, count]) => count === 0)?.[0] ?? "";
+  }
+  return "";
+}
+const graderPolicies = {
+  good: await policyMean((task) => ({ answer: task.expected })),
+  fenced: await policyMean((task) => ({ answer: `\`\`\`\n${task.expected}\n\`\`\`` })),
+  proseWrapped: await policyMean((task) => ({ answer: `The answer is ${task.expected}.` })),
+  jsonWrapped: await policyMean((task) => ({ answer: JSON.stringify({ answer: task.expected }) })),
+  checked: await policyMean((task) => ({ answer: `${task.expected} (check: 2+2=4)` })),
+  empty: await policyMean(() => ({ answer: "" })),
+  zero: await policyMean(() => ({ answer: "0" })),
+  one: await policyMean(() => ({ answer: "1" })),
+  fortyTwo: await policyMean(() => ({ answer: "42" })),
+  constantName: await policyMean(() => ({ answer: "Ari" })),
+  alwaysYes: await policyMean(() => ({ answer: "yes" })),
+  alwaysRefuse: await policyMean(() => ({ answer: "I cannot help with that request." })),
+  sameToolCall: await policyMean(() => ({ toolLog: [{ name: "noop", args: {}, result: null }] })),
+  firstName: await policyMean((task) => ({ answer: firstNamedOption(task) })),
+  nullAnswer: await policyMean(() => ({ answer: null })),
+  numberAnswer: await policyMean(() => ({ answer: 12 })),
+  arrayAnswer: await policyMean(() => ({ answer: ["1"] })),
+};
+const visibleRows = await Promise.all(tasks.map(async (task) => ({ family: task.metadata.family, score: (await benchmark.score(task, { answer: solveFromPrompt(task.prompt) })).score })));
+const visibleByFamily = {};
+for (const row of visibleRows) { const bucket = visibleByFamily[row.family] ??= { solved: 0, tasks: 0 }; bucket.tasks += 1; bucket.solved += row.score; }
+const visibleMean = visibleRows.reduce((sum, row) => sum + row.score, 0) / visibleRows.length;
+assert.equal(visibleMean, 1, `visible-information policy scored ${visibleMean}`);
+
+const numberPolicyMeans = { first: {}, last: {} };
+await Promise.all(tasks.map(async (task) => {
+  const printed = (task.prompt.match(/\d+/g) ?? []).map(Number);
+  for (const [name, value] of [["first", printed[0]], ["last", printed[printed.length - 1]]]) {
+    const score = value === undefined ? 0 : (await benchmark.score(task, { answer: String(value) })).score;
+    const bucket = numberPolicyMeans[name][task.metadata.family] ??= { scored: 0, tasks: 0 };
+    bucket.tasks += 1; bucket.scored += score;
+  }
+}));
+for (const [name, families] of Object.entries(numberPolicyMeans)) {
+  for (const [family, bucket] of Object.entries(families)) {
+    assert.ok(bucket.scored / bucket.tasks < 0.1, `${name}-number policy scored ${bucket.scored / bucket.tasks} in ${family}`);
+  }
+}
+
+const orderingTasks = tasks.filter((task) => task.metadata.family === "ordering");
+const otherOption = (task) => task.metadata.options.find((name) => name !== task.expected);
+const orderingPhrasings = {
+  cuedFirst: (task) => `${task.expected} finished first, ahead of ${otherOption(task)}.`,
+  cuedBefore: (task) => `${task.expected} finished before ${otherOption(task)}.`,
+  trailingMention: (task) => `${otherOption(task)} finished behind ${task.expected}.`,
+};
+for (const [name, make] of Object.entries(orderingPhrasings)) {
+  const scores = await Promise.all(orderingTasks.map(async (task) => (await benchmark.score(task, { answer: make(task) })).score));
+  assert.equal(scores.reduce((sum, score) => sum + score, 0) / scores.length, 1, `ordering phrasing ${name} must score 1`);
+}
+
 assert.equal(graderPolicies.good, 1);
-for (const [name, mean] of Object.entries(graderPolicies).filter(([name]) => name !== "good")) assert.ok(mean < 0.1, `${name} scored ${mean}`);
+for (const name of ["fenced", "proseWrapped", "jsonWrapped", "checked"]) assert.equal(graderPolicies[name], 1, `${name} scored ${graderPolicies[name]}`);
+for (const [name, mean] of Object.entries(graderPolicies).filter(([name]) => !["good", "fenced", "proseWrapped", "jsonWrapped", "checked"].includes(name))) assert.ok(mean < 0.1, `${name} scored ${mean}`);
+
+await execFile(process.execPath, ["scripts/gen-tasks.mjs", "--seed", "424242", "--split", "hidden"]);
+const hiddenTasks = (await readFile("artifacts/hidden-tasks.jsonl", "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+assert.equal(hiddenTasks.length, tasks.length);
+assert.ok(hiddenTasks.every((task) => task.id.startsWith("hid-")), "hidden split needs the hid- prefix");
+assert.ok(hiddenTasks.every((task, index) => task.prompt !== tasks[index]?.prompt), "hidden prompts must differ from public");
+assert.ok(hiddenTasks.every((task) => !("seed" in (task.metadata ?? {}))), "hidden task metadata must not carry the split seed");
+const publicPrompts = new Set(tasks.map((task) => task.prompt));
+assert.ok(hiddenTasks.every((task) => !publicPrompts.has(task.prompt)), "no hidden task may reproduce a public one");
+const hiddenVisible = await Promise.all(hiddenTasks.map(async (task) => (await benchmark.score(task, { answer: solveFromPrompt(task.prompt) })).score));
+const hiddenVisibleMean = hiddenVisible.reduce((sum, score) => sum + score, 0) / hiddenVisible.length;
+assert.equal(hiddenVisibleMean, 1, `visible-information policy scored ${hiddenVisibleMean} on hidden tasks`);
+const leakedScores = await Promise.all(hiddenTasks.map(async (task, index) => (await benchmark.score(task, { answer: tasks[index].expected })).score));
+const leakedMean = leakedScores.reduce((sum, score) => sum + score, 0) / leakedScores.length;
+assert.ok(leakedMean < 0.5, `public answer key scored ${leakedMean} on hidden tasks`);
+
+const hiddenRun = JSON.parse((await cli("run", "--provider", "mock", "--tasks", "artifacts/hidden-tasks.jsonl", "--json")).stdout);
+assert.equal(hiddenRun.rows.length, 300);
+assert.ok(hiddenRun.rows.every((row) => row.taskId.startsWith("hid-")), "run --tasks must read the split file");
+assert.ok(hiddenRun.breakdown?.byVariant?.v5, "hidden run report must carry the variant breakdown");
+const listHidden = JSON.parse((await cli("list", "--tasks", "artifacts/hidden-tasks.jsonl", "--json")).stdout);
+assert.ok(listHidden.tasks.every((task) => task.id.startsWith("hid-")), "list --tasks must read the split file");
+const { run: sdkRun } = await import("../dist/index.js");
+const { mockAdapter } = await import("benchmark-core");
+const sdkHidden = await sdkRun(mockAdapter(), { tasksPath: "artifacts/hidden-tasks.jsonl" });
+assert.ok(sdkHidden.rows.every((row) => row.taskId.startsWith("hid-")), "SDK run tasksPath must read the split file");
+assert.ok(sdkHidden.breakdown.byVariant.v5, "SDK run report must carry the variant breakdown");
+const { createApi } = await import("../dist/api.js");
+const apiResponse = await createApi({ tasksPath: "artifacts/hidden-tasks.jsonl" })(new Request("http://local/v1/tasks"));
+assert.equal(apiResponse.status, 200);
+const servedTasks = (await apiResponse.json()).tasks;
+assert.ok(servedTasks.every((task) => task.id.startsWith("hid-")), "createApi tasksPath must read the split file");
+assert.ok(servedTasks.every((task) => !("seed" in (task.metadata ?? {}))), "served hidden tasks must not carry the split seed");
 
 await cli("list", "--json"); await cli("show", "reason-01-v1", "--json");
-await cli("score", "artifacts/mock-report.json", "--json"); await cli("card", "artifacts/mock-report.json", "artifacts/card.svg");
+const rescored = JSON.parse((await cli("score", "artifacts/mock-report.json", "--json")).stdout);
+assert.ok(rescored.breakdown?.byFamily?.ordering, "score output must carry the family breakdown");
+await cli("card", "artifacts/mock-report.json", "artifacts/card.svg");
 await cli("provenance", "--json"); const entry = JSON.parse((await cli("index-entry", "--json")).stdout); assert.equal(entry.task_count, 300);
 const stabilityReports = [
   { model: "model-a", rows: report.rows.map((row, index) => ({ taskId: row.taskId, score: index % 10 < 8 ? 1 : 0 })) },
@@ -39,7 +152,57 @@ const stabilityReports = [
 for (const [index, value] of stabilityReports.entries()) await writeFile(`artifacts/stability-${index}.json`, JSON.stringify(value));
 const stability = JSON.parse((await cli("score-stability", ...stabilityReports.map((_, index) => `artifacts/stability-${index}.json`), "--resamples", "500", "--seed", "7", "--svg", "artifacts/volatility.svg")).stdout);
 assert.equal(stability.models[0].model, "model-a"); assert.equal(stability.sharedTasks, 300); assert.equal(stability.models.length, 3);
+assert.equal(stability.sharedItems, 60); assert.ok(stability.models[0].probabilityFirst > 0.9, `dominant model pFirst ${stability.models[0].probabilityFirst}`);
+assert.ok(Array.isArray(stability.warnings));
+assert.deepEqual(stability.promptSensitivity?.variants, [1, 2, 3, 4, 5]);
+assert.equal(stability.promptSensitivity?.perVariant.length, 5);
+assert.equal(stability.promptSensitivity?.rankRange.length, 3);
 assert.match(await readFile("artifacts/volatility.svg", "utf8"), /width="1200" height="630"/);
+
+const identical = [{ model: "same-a", rows: report.rows }, { model: "same-b", rows: report.rows }];
+for (const [index, value] of identical.entries()) await writeFile(`artifacts/same-${index}.json`, JSON.stringify(value));
+const sameResult = JSON.parse((await cli("score-stability", "artifacts/same-0.json", "artifacts/same-1.json", "--resamples", "500", "--seed", "11", "--svg", "artifacts/same.svg")).stdout);
+assert.ok(sameResult.meanKendallTau > 0.99, `identical models tau ${sameResult.meanKendallTau}`);
+for (const model of sameResult.models) assert.ok(Math.abs(model.probabilityFirst - 0.5) < 0.05, `identical model pFirst ${model.probabilityFirst}`);
+
+const dominant = [
+  { model: "always-first", rows: report.rows.map((row) => ({ taskId: row.taskId, score: 1 })) },
+  { model: "always-last", rows: report.rows.map((row) => ({ taskId: row.taskId, score: 0 })) },
+];
+for (const [index, value] of dominant.entries()) await writeFile(`artifacts/dominant-${index}.json`, JSON.stringify(value));
+const dominantResult = JSON.parse((await cli("score-stability", "artifacts/dominant-0.json", "artifacts/dominant-1.json", "--resamples", "500", "--seed", "13", "--svg", "artifacts/dominant.svg")).stdout);
+assert.equal(dominantResult.models[0].model, "always-first");
+assert.equal(dominantResult.models[0].probabilityFirst, 1);
+assert.deepEqual(dominantResult.models[0].rankInterval95, { low: 1, high: 1 });
+
+const tiny = [
+  { model: "tiny-a", rows: report.rows.slice(0, 10).map((row) => ({ taskId: row.taskId, score: 1 })) },
+  { model: "tiny-b", rows: report.rows.slice(0, 10).map((row) => ({ taskId: row.taskId, score: 0.5 })) },
+];
+for (const [index, value] of tiny.entries()) await writeFile(`artifacts/tiny-${index}.json`, JSON.stringify(value));
+const tinyResult = JSON.parse((await cli("score-stability", "artifacts/tiny-0.json", "artifacts/tiny-1.json", "--resamples", "500", "--seed", "17", "--svg", "artifacts/tiny.svg")).stdout);
+assert.equal(tinyResult.sharedTasks, 10); assert.ok(tinyResult.warnings.some((warning) => warning.includes("shared tasks")), `expected small-sample warning, got ${tinyResult.warnings}`);
+
+const clustered = [
+  { model: "cluster-a", rows: Array.from({ length: 30 }, (_, index) => ({ taskId: `solo-v${index + 1}`, score: 1 })) },
+  { model: "cluster-b", rows: Array.from({ length: 30 }, (_, index) => ({ taskId: `solo-v${index + 1}`, score: index === 29 ? 0 : 1 })) },
+];
+for (const [index, value] of clustered.entries()) await writeFile(`artifacts/cluster-${index}.json`, JSON.stringify(value));
+const clusterResult = JSON.parse((await cli("score-stability", "artifacts/cluster-0.json", "artifacts/cluster-1.json", "--resamples", "500", "--seed", "23", "--svg", "artifacts/cluster.svg")).stdout);
+assert.equal(clusterResult.sharedItems, 1);
+assert.equal(clusterResult.models[0].probabilityFirst, 1);
+assert.deepEqual(clusterResult.models[0].rankInterval95, { low: 1, high: 1 });
+assert.ok(clusterResult.warnings.some((warning) => warning.includes("shared items")), `expected low-item warning, got ${clusterResult.warnings}`);
+
+const tenModelReports = Array.from({ length: 10 }, (_, index) => ({ model: `m${index}`, rows: report.rows.map((row) => ({ taskId: row.taskId, score: index / 10 })) }));
+const tenFiles = [];
+for (const value of tenModelReports) { const file = `artifacts/ten-${value.model}.json`; await writeFile(file, JSON.stringify(value)); tenFiles.push(file); }
+await cli("score-stability", ...tenFiles, "--resamples", "200", "--seed", "19", "--svg", "artifacts/ten.svg");
+const tenSvg = await readFile("artifacts/ten.svg", "utf8");
+const coordinates = [...tenSvg.matchAll(/(?:x1|x2|cx|x)="(\d+(?:\.\d+)?)"/g)].map((match) => Number(match[1]));
+const heights = [...tenSvg.matchAll(/(?:y1|y2|cy|y)="(\d+(?:\.\d+)?)"/g)].map((match) => Number(match[1]));
+assert.ok(coordinates.every((value) => value <= 1200), "chart x overflow");
+assert.ok(heights.every((value) => value <= 630), "chart y overflow");
 
 const probe = createNetServer(); await new Promise((resolve) => probe.listen(0, "127.0.0.1", resolve));
 const address = probe.address(); assert.ok(address && typeof address === "object"); await new Promise((resolve) => probe.close(resolve));
@@ -63,9 +226,23 @@ try {
   assert.deepEqual(toolNames, ["get_provenance", "get_task", "list_tasks", "run_benchmark", "score_answer"]);
   const calls = [["list_tasks", {}], ["get_task", { taskId: "reason-01-v1" }], ["score_answer", { taskId: "reason-01-v1", submission: report.rows[0].submission }], ["get_provenance", {}], ["run_benchmark", { model: "offline" }]];
   for (const [name, args] of calls) { const result = await client.callTool({ name, arguments: args }); if (name === "run_benchmark") assert.equal(result.isError, true); else assert.notEqual(result.isError, true); }
+  const mcpRun = await client.callTool({ name: "run_benchmark", arguments: { model: "offline", provider: "mock" } });
+  assert.notEqual(mcpRun.isError, true);
+  const mcpReport = JSON.parse(mcpRun.content[0].text);
+  assert.equal(mcpReport.rows.length, 300); assert.ok(mcpReport.breakdown?.byVariant?.v5, "MCP run_benchmark must carry the breakdown");
 } finally { await client.close(); }
 
-const artifact = { task_count: report.rows.length, scores: report.rows.map((row) => row.score), grader_policies: graderPolicies, stability: { models: stability.models.length, shared_tasks: stability.sharedTasks }, route_status_codes: routes, tool_names: toolNames };
+const hiddenTransport = new StdioClientTransport({ command: process.execPath, args: ["dist/cli.js", "mcp", "--tasks", "artifacts/hidden-tasks.jsonl"], cwd: process.cwd(), stderr: "pipe" });
+const hiddenClient = new Client({ name: "benchmark-ranking-stability-e2e-hidden", version: "0.2.0" }); await hiddenClient.connect(hiddenTransport);
+try {
+  const hiddenList = await hiddenClient.callTool({ name: "list_tasks", arguments: {} });
+  const mcpHiddenTasks = JSON.parse(hiddenList.content[0].text).tasks;
+  assert.ok(mcpHiddenTasks.every((task) => task.id.startsWith("hid-")), "mcp --tasks must serve the split file");
+  assert.ok(mcpHiddenTasks.every((task) => !("seed" in (task.metadata ?? {}))), "MCP-served hidden tasks must not carry the split seed");
+} finally { await hiddenClient.close(); }
+
+const numberPolicyReport = Object.fromEntries(Object.entries(numberPolicyMeans).map(([name, families]) => [`${name}_number`, Object.fromEntries(Object.entries(families).map(([family, bucket]) => [family, `${bucket.scored}/${bucket.tasks}`]))]));
+const artifact = { task_count: report.rows.length, scores: report.rows.map((row) => row.score), grader_policies: graderPolicies, visible_policy: Object.fromEntries(Object.entries(visibleByFamily).map(([family, bucket]) => [family, `${bucket.solved}/${bucket.tasks}`])), prompt_number_policies: numberPolicyReport, hidden_split: { tasks: hiddenTasks.length, public_key_mean: leakedMean, visible_mean: hiddenVisibleMean }, stability: { models: stability.models.length, shared_tasks: stability.sharedTasks }, route_status_codes: routes, tool_names: toolNames };
 await writeFile("artifacts/e2e-report.json", `${JSON.stringify(artifact, null, 2)}\n`);
 assert.match(await readFile("data/PROVENANCE.md", "utf8"), /Seeded synthetic reasoning bank/);
-console.log(`e2e: ${artifact.task_count} tasks, ${Object.keys(routes).length} routes, ${toolNames.length} tools, adversarial grading and stability -> all surfaces passed, ok`);
+console.log(`e2e: ${artifact.task_count} tasks, ${Object.keys(routes).length} routes, ${toolNames.length} tools, visible policy solved ${visibleMean * 300}/300 public and ${hiddenVisibleMean * 300}/300 hidden, adversarial grading and stability -> all surfaces passed, ok`);

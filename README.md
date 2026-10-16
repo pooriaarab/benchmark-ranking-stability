@@ -11,7 +11,7 @@ npx benchmark-ranking-stability run --provider mock --json
 ```
 
 ```json
-{"model":"mock:1","mean":0.5,"confidenceInterval95":{"low":0.44333333333333336,"high":0.5566666666666666},"totals":{"tasks":300,"passed":150,"failed":0}}
+{"model":"mock:1","mean":0.5,"confidenceInterval95":{"low":0.44333333333333336,"high":0.5566666666666666},"totals":{"tasks":300,"passed":150,"failed":0},"breakdown":{"byFamily":{"multi-step-arithmetic":{"tasks":50,"mean":0.48},"ordering":{"tasks":50,"mean":0.52},"remainder":{"tasks":50,"mean":0.48},"rule-tracing":{"tasks":50,"mean":0.52},"sequence":{"tasks":50,"mean":0.52},"set-counting":{"tasks":50,"mean":0.48}},"byVariant":{"v1":{"tasks":60,"mean":0.5},"v2":{"tasks":60,"mean":0.5},"v3":{"tasks":60,"mean":0.5},"v4":{"tasks":60,"mean":0.5},"v5":{"tasks":60,"mean":0.5}}}}
 ```
 
 The mock deliberately mixes correct and wrong answers. The 300 public tasks come from a committed seeded generator: 60 reasoning items with five paraphrases each.
@@ -38,9 +38,9 @@ Mode A is free and offline. Pass reports from at least two models:
 npx benchmark-ranking-stability score-stability run-a.json run-b.json --seed 7 --svg volatility.svg
 ```
 
-The command writes JSON statistics and a 1200×630 SVG. It bootstraps task rows and repeated reports with a fixed seed.
+The command writes JSON statistics and a 1200×630 SVG. Each bootstrap resample draws items once and applies the draw to every model, then picks one run per model, so comparisons stay paired. A fixed seed makes it reproducible.
 
-Mode B runs the included suite. Run each model with several `--seed` values, then give every report to `score-stability`.
+Mode B runs the included suite. For a real provider, run the same `--model` more than once to collect repeated reports; `score-stability` then resamples run-to-run variation as well as the task sample. The `--seed` flag drives only the bootstrap and the mock's answer pattern — providers never see it, and the mock encodes it in its model id (`mock:N`), so mock runs from different seeds compare as different models, not repeated runs.
 
 ## How it works
 
@@ -48,7 +48,7 @@ Mode B runs the included suite. Run each model with several `--seed` values, the
 Mode A: RunReport files -> align task IDs -> bootstrap tasks and runs
                                          -> rank intervals + tau-b + SVG
 
-Mode B: 60 items × 5 prompts -> model -> exact grader -> RunReport
+Mode B: 60 items × 5 prompts -> model -> normalized grader -> RunReport
 ```
 
 The stability result reports:
@@ -57,6 +57,9 @@ The stability result reports:
 - `probabilityFirst`: the share of resamples where a model ranks first. Tied models split that resample.
 - `rankInterval95`: the central 95% of bootstrapped ranks.
 - `mean`: the model's mean task score across its supplied reports.
+- `promptSensitivity`: per-variant rankings and each model's rank range, present when task IDs carry `-vN` variants.
+- `warnings`: conditions that weaken the result, such as fewer than 30 shared tasks, one run per model, or under 500 resamples.
+- `sharedItems`: the number of resampled items; paraphrase variants of one item count once.
 
 Read intervals and first-place probabilities together. A small mean gap can coexist with uncertain rank order.
 
@@ -84,11 +87,11 @@ Checked on 2026-10-15.
 | --- | --- |
 | Offline analysis | Multiple reports per model, shared-task alignment, fixed-seed bootstrap |
 | Own suite | 60 items across six reasoning families, five prompt forms each |
-| Grading | Full-answer deterministic match after trim and Unicode normalization |
+| Grading | Deterministic match after fence stripping, last-JSON-object extraction, and case, whitespace, money, and unit normalization |
 | Output | JSON statistics and a 1200×630 volatility SVG |
 | Runtime | SDK, CLI, Model Context Protocol, and fetch-style HTTP API |
 
-The E2E gate runs all 300 tasks and every HTTP and MCP operation. It also checks four weak answer policies.
+The E2E gate runs all 300 tasks and every HTTP and MCP operation. It also checks weak policies: empty, constants, refusal, a repeated tool call, and a first-name heuristic must each score below 0.10, and answering with the first or last number in the prompt must stay below 0.10 in every family.
 
 ## Common use cases
 
@@ -104,7 +107,7 @@ The E2E gate runs all 300 tasks and every HTTP and MCP operation. It also checks
 - **Reproducible statistics:** fixed seeds control 2,000 bootstrap resamples by default.
 - **Tie handling:** Kendall tau-b and average ranks retain tied scores.
 - **Inspectable data:** JSON Lines tasks and their generator ship in the package.
-- **Adversarial gate:** empty, random, always-yes, and repeated answers must score below 0.10.
+- **Adversarial gate:** empty, constant, refusal, repeated-tool-call, and first-name answers must score below 0.10.
 - **Shareable output:** volatility and benchmark cards are plain SVG files.
 
 ## SDK
@@ -118,13 +121,13 @@ const result = await scoreStabilityFiles(
 );
 ```
 
-`benchmark` exposes task metadata. `run(adapter, options)` runs Mode B. `score(taskId, submission)` applies its deterministic grader.
+`benchmark` exposes task metadata. `run(adapter, options)` runs Mode B and attaches a `breakdown` of means by family and variant; pass `options.tasksPath` to run a split file such as `artifacts/hidden-tasks.jsonl`. `createBenchmark({ tasksPath })` binds the task list, `score(taskId, submission)` applies its deterministic grader, and `reportBreakdown(report, tasks)` recomputes the aggregates.
 
 ## CLI
 
 The standard commands are `list`, `show`, `run`, `score`, `card`, `provenance`, `index-entry`, `serve`, and `mcp`. This package also adds `score-stability` for Mode A.
 
-Use `run --provider mock` without a key. Use `--provider openrouter` with `OPENROUTER_API_KEY`, or `--provider openai` with `OPENAI_BASE_URL` and `OPENAI_API_KEY`.
+Use `run --provider mock` without a key. Use `--provider openrouter` with `OPENROUTER_API_KEY`, or `--provider openai` with `OPENAI_BASE_URL` and `OPENAI_API_KEY`. Add `--tasks <path>` to `list`, `show`, `run`, `score`, `serve`, or `mcp` to work from a split file; `run` and `score` attach a `breakdown` of means by family and variant.
 
 ## Model Context Protocol
 
@@ -134,11 +137,11 @@ Start the Model Context Protocol (MCP) server over standard input and output:
 npx benchmark-ranking-stability mcp
 ```
 
-Its tools are `list_tasks`, `get_task`, `score_answer`, `run_benchmark`, and `get_provenance`.
+Its tools are `list_tasks`, `get_task`, `score_answer`, `run_benchmark`, and `get_provenance`. `run_benchmark` returns the report with the same `breakdown`; pass `provider: "mock"` for a keyless offline run, and start the server as `mcp --tasks <path>` to serve a split file.
 
 ## HTTP API
 
-Import `handler` from `benchmark-ranking-stability/api`, or start the self-hosted Node server:
+Import `handler` from `benchmark-ranking-stability/api`, or call `createApi({ tasksPath })` for a handler bound to a split file. To self-host on Node:
 
 ```bash
 npx benchmark-ranking-stability serve 3000
@@ -155,18 +158,19 @@ node scripts/gen-tasks.mjs --seed 20261015 --split public
 node scripts/gen-tasks.mjs --seed YOUR_PRIVATE_SEED --split hidden
 ```
 
-The hidden command writes to ignored `artifacts/hidden-tasks.jsonl`. Keep that seed and file outside version control. Refreshes happen quarterly after a reviewed public diff.
+The hidden command writes `hid-`-prefixed tasks to ignored `artifacts/hidden-tasks.jsonl` and refuses to run without an explicit private `--seed`. Keep the file outside version control and run it with `--tasks artifacts/hidden-tasks.jsonl`. Refreshes happen quarterly after a reviewed public diff.
 
 Mode A downloads no dataset. It reads only the RunReport files named on the command line. See [`data/PROVENANCE.md`](data/PROVENANCE.md) for the machine-aligned record.
 
 ## Limits and known weaknesses
 
-- Exact matching rejects equivalent forms such as `12.0` for `12`.
-- Public tasks can enter training data. Use a privately seeded split for final claims.
-- Five paraphrases of one item are correlated observations, not five independent facts.
+- The grader reads the first number token or an order-cued option mention as the answer; a stray value or name can be misread.
+- Public tasks can enter training data. Use a privately seeded split for final claims. The hidden split stays hidden only while its seed is private and its prompts are not served publicly; anyone who learns the seed or sees the prompts can rebuild it.
+- Five paraphrases of one item are correlated observations, so `score-stability` resamples items, not task rows.
 - Small samples and ties can produce wide rank intervals or low-information rankings.
 - Reports use the intersection of task IDs. Missing rows can shrink the effective sample.
-- Different benchmark versions, graders, or provider settings can invalidate a comparison.
+- Different benchmark versions, graders, or provider settings can invalidate a comparison; 0.1.0 scores are not comparable to 0.2.0.
+- The MCP `score_answer` tool declares `submission` as an open object schema in benchmark-core, so OpenAI strict tool mode may reject it.
 - Bootstrap results describe the supplied reports. They do not cover every future prompt.
 - The synthetic suite covers six compact reasoning families, not broad model quality.
 
@@ -182,7 +186,7 @@ The package has no public leaderboard yet. No real-model results are published b
 
 ## Status
 
-Version 0.1.0 is alpha. Schemas and statistical output can change before 1.0. Report defects through [GitHub Issues](https://github.com/pooriaarab/benchmark-ranking-stability/issues).
+Version 0.2.0 is alpha. Schemas and statistical output can change before 1.0. Report defects through [GitHub Issues](https://github.com/pooriaarab/benchmark-ranking-stability/issues).
 
 Public case studies are not yet published.
 
@@ -222,7 +226,7 @@ benchmark-ranking-stability focuses on uncertainty in a ranking and can consume 
 
 ### Why is there no public model leaderboard?
 
-benchmark-ranking-stability has no verified real-model runs for version 0.1.0. The project does not invent or extrapolate scores.
+benchmark-ranking-stability has no verified real-model runs for version 0.2.0. The project does not invent or extrapolate scores.
 
 ## License
 
