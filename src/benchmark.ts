@@ -11,7 +11,7 @@ export function createBenchmark(options: BenchmarkTasksOptions = {}): Benchmark<
   }
   return defineBenchmark({
     id: "benchmark-ranking-stability", name: "Ranking Stability", tagline: "Measure ranking movement across seeds, prompts, and task samples.", tags: ["helpful","viral","science"], category: "model-evaluation",
-    whatItMeasures: "How model rankings move when the seed, prompt wording, or task sample changes.", version: "0.1.0", status: "alpha", loadTasks,
+    whatItMeasures: "How model rankings move when the seed, prompt wording, or task sample changes.", version: "0.2.0", status: "alpha", loadTasks,
     grade: (task, submission) => gradeAnswer(task, submission.answer),
     provenance: [{
       name: "Seeded synthetic reasoning bank (Mode B; Mode A uses only user-supplied reports)", kind: "synthetic", url: "https://github.com/pooriaarab/benchmark-ranking-stability/blob/main/scripts/gen-tasks.mjs",
