@@ -231,3 +231,18 @@ benchmark-ranking-stability has no verified real-model runs for version 0.2.0. T
 ## License
 
 [MIT](LICENSE) © Pooria Arab
+
+## Cite
+
+Please cite this package with its Zenodo DOI. The DOI below names all versions. GitHub also shows a "Cite this repository" box from `CITATION.cff`.
+
+```bibtex
+@software{arab2026benchmarkrankingstability,
+  author  = {Arab, Pooria},
+  title   = {benchmark-ranking-stability},
+  year    = {2026},
+  version = {0.2.0},
+  doi     = {10.5281/zenodo.23422385},
+  url     = {https://private-repo-337e.com/benchmarks/benchmark-ranking-stability}
+}
+```
