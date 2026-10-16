@@ -23,7 +23,7 @@ export function createBenchmark(options: BenchmarkTasksOptions = {}): Benchmark<
       contaminationNotes: "The 300 public prompt variants use seed 20261015 and are visible in the package. The hidden split uses the `hid-` id prefix and requires an explicit private `--seed`; keep its seed and file outside version control.",
       refresh: "Quarterly, choose a new seed, generate both splits, review the public JSONL diff, and keep the hidden seed and file outside version control.",
     }],
-    gradingMethod: "Deterministic answer match after stripping one code fence, taking the last JSON object when present, and normalizing case, whitespace, money and units; name answers match the last option mentioned.",
+    gradingMethod: "Deterministic answer match after stripping one code fence, taking the last JSON object when present, and normalizing case, whitespace, money and units; numeric answers compare the first number token and name answers match the last option mentioned.",
   });
 }
 

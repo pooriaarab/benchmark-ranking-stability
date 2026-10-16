@@ -226,7 +226,7 @@ benchmark-ranking-stability focuses on uncertainty in a ranking and can consume 
 
 ### Why is there no public model leaderboard?
 
-benchmark-ranking-stability has no verified real-model runs for version 0.1.0. The project does not invent or extrapolate scores.
+benchmark-ranking-stability has no verified real-model runs for version 0.2.0. The project does not invent or extrapolate scores.
 
 ## License
 

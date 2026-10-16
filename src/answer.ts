@@ -54,9 +54,9 @@ function extract(text: string): string {
 const normalize = (value: string) => value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim().replace(/^["'`]+|["'`.!,;:?]+$/g, "").trim();
 const parseNumber = (value: string) => { const parsed = Number(value.replace(/[$€£¥,%]/g, "")); return Number.isFinite(parsed) ? parsed : undefined; };
 
-function lastNumber(text: string): number | undefined {
+function firstNumber(text: string): number | undefined {
   const matches = text.match(NUMBER);
-  return matches ? parseNumber(matches[matches.length - 1]!) : undefined;
+  return matches ? parseNumber(matches[0]!) : undefined;
 }
 
 function lastMention(text: string, choices: string[]): string | undefined {
@@ -80,7 +80,7 @@ export function gradeAnswer(task: Task, answer: unknown): TaskScore {
   const got = normalize(candidate);
   const expectedNumber = parseNumber(wanted);
   const pass = expectedNumber !== undefined
-    ? lastNumber(candidate) === expectedNumber
+    ? firstNumber(candidate) === expectedNumber
     : got === wanted || lastMention(got, (optionsOf(task) ?? [expected]).map(normalize)) === wanted;
   return { score: pass ? 1 : 0, reason: pass ? "Answer matches after normalization." : "Answer does not match the generated answer key.", details };
 }

@@ -7,15 +7,15 @@ Each Mode B task has one generated answer. The grader normalizes the submission 
 - One surrounding code fence is stripped.
 - The last balanced `{...}` JSON object is used when one is present; keys named `answer`, `result`, `final`, `value`, or `output` (or a single-key object) supply the answer.
 - Text is normalized for case, Unicode form (NFKC), whitespace, quotes, and trailing punctuation.
-- Numeric keys compare the last number in the answer; `$`, `,`, `%`, and currency symbols are ignored, so `42`, `$42.00`, and `42 dollars` agree.
+- Numeric keys compare the first number token in the answer; `$`, `,`, `%`, and currency symbols are ignored, so `42`, `$42.00`, and `42 dollars` agree.
 - Ordering tasks carry `metadata.options`; the pass check takes the last option name mentioned, so `Ari finished first.` and `The winner is Ari` both score.
 - Empty or non-string answers score 0.
 
 Ways this grader can fail:
 
-- A leaked public answer key can turn recall into an apparent reasoning success. The hidden split (`hid-` prefix, unpublished seed) exists for that reason; keep it outside version control.
+- A leaked public answer key can turn recall into an apparent reasoning success. The hidden split (`hid-` prefix, unpublished seed) exists for that reason; keep it outside version control. Hidden task metadata carries no seed, so a served task cannot reveal how to regenerate the split, and the generator redraws until no hidden question matches a public one.
 - Prose that mentions the expected value for the wrong reason still scores. The last-mention rule also credits a guess that happens to land on the key.
-- Numbers embedded in a longer explanation are read as the answer; a trailing value is assumed final.
+- Numbers embedded in a longer explanation are read as the answer; the first number token is treated as final, so a worked example placed before the answer can be misread.
 - Generator mistakes become authoritative until a human reviews the task diff.
 - The six synthetic families cover only a narrow slice of reasoning.
 - MCP `score_answer.submission` is an open object schema in benchmark-core, so OpenAI strict tool mode may reject it; the shape is documented upstream, not here.
@@ -30,7 +30,7 @@ When a task set has at least two variant indices the result adds `promptSensitiv
 
 Ways the statistics can mislead:
 
-- Small task or run samples produce wide, unstable intervals. Fewer than 30 shared tasks, one run per model, or under 500 resamples each add a `warnings` entry.
+- Small task or run samples produce wide, unstable intervals. Fewer than 30 shared tasks, fewer than 30 shared items (the bootstrap resamples item clusters, not rows), one run per model, or under 500 resamples each add a `warnings` entry.
 - Missing task IDs reduce the comparison to the intersection.
 - Ties make rank order less informative even with tau-b correction. Identical models report tau 1 and split `probabilityFirst`.
 - Reports from different benchmark versions may not be comparable.
