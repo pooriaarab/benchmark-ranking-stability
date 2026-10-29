@@ -1,0 +1,3 @@
+\begin{figure}[ht]\centering\begin{tikzpicture}\begin{axis}[ymin=-0.05,ymax=1.1,ylabel={Mean score},xtick={0,1,2,3,4,5,6,7,8},xticklabels={empty,zero,42,echo,refusal,first,last,key,mock},x tick label style={rotate=35,anchor=east}]
+\addplot+[only marks,mark=*,color=okblue,error bars/.cd,y dir=both,y explicit] table[x=index,y=score,y error minus=low,y error plus=high,col sep=comma]{data/policies.generated.csv};
+\end{axis}\end{tikzpicture}\caption{Scripted and mock controls. Bars show item-cluster bootstrap confidence intervals. The key control has access to expected answers. Boundary intervals collapse; the accompanying table reports Wilson intervals for all-variant item success. First and last refer to number extraction.}\label{fig:policies}\end{figure}

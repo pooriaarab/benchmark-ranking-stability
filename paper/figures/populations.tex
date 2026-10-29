@@ -1,0 +1,5 @@
+\begin{figure}[ht]\centering\begin{tikzpicture}\begin{axis}[xlabel={Simulated leader probability gap},ylabel={Mean bootstrap first-place share},ymin=0,ymax=1.1,legend pos=north west]
+\addplot+[mark=*,error bars/.cd,y dir=both,y explicit] table[x=gap,y=share,y error minus=low,y error plus=high,col sep=comma]{data/population-2.generated.csv};\addlegendentry{Two simulated agents}
+\addplot+[mark=square*,error bars/.cd,y dir=both,y explicit] table[x=gap,y=share,y error minus=low,y error plus=high,col sep=comma]{data/population-4.generated.csv};\addlegendentry{Four simulated agents}
+\addplot+[mark=triangle*,error bars/.cd,y dir=both,y explicit] table[x=gap,y=share,y error minus=low,y error plus=high,col sep=comma]{data/population-8.generated.csv};\addlegendentry{Eight simulated agents}
+\end{axis}\end{tikzpicture}\caption{Simulated population sweep. Bars are confidence intervals for the mean across independent simulation seeds. They are not confidence intervals for real agents. The designated leader is fixed before generating results; it is not selected from observed winners.}\label{fig:populations}\end{figure}

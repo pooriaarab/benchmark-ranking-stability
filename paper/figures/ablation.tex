@@ -1,0 +1,4 @@
+\begin{figure}[ht]\centering\begin{tikzpicture}\begin{axis}[xlabel={Simulation seed},ylabel={Leader rank interval width},ymin=-0.05,ymax=1.2,legend pos=south west]
+\addplot+[mark=*,color=okblue] table[x=seed,y=clustered,col sep=comma]{data/ablation.generated.csv};\addlegendentry{Item clusters}
+\addplot+[mark=square*,color=okorange,dashed] table[x=seed,y=independent,col sep=comma]{data/ablation.generated.csv};\addlegendentry{Prompt rows treated independently}
+\end{axis}\end{tikzpicture}\caption{Simulated control-layer ablation on paired reports. Each point is a conditional rank interval width, not a success rate. Removing item grouping can change the analysis without changing any answer. Overlapping lines indicate a null at the rank-width resolution.}\label{fig:ablation}\end{figure}
