@@ -1,0 +1,14 @@
+{
+  "title": "Benchmark Ranking Stability: Separating Score Order from Evidence",
+  "orcid": "https://orcid.org/0009-0005-9964-6841",
+  "keywords": [
+    "ranking stability",
+    "bootstrap",
+    "prompt sensitivity",
+    "benchmark",
+    "simulation"
+  ],
+  "code_url": "https://github.com/pooriaarab/benchmark-ranking-stability",
+  "artifact_name": "ranking-stability-paper.pdf",
+  "source_commit": "6479fb1d81019faa0039c1a98a84f51700114f81"
+}

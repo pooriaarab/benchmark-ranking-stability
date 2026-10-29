@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "title": "Benchmark Ranking Stability: Separating Score Order from Evidence",
+  "abstract": "A benchmark score orders systems without showing how that order depends on the evaluation sample. Benchmark Ranking Stability combines paired item resampling, repeated runs, and prompt-specific ranks. Its public suite contains 60 reasoning items across 6 families, each with 5 prompts. We run 9 scripted or mock controls twice through the actual evaluator. We also evaluate simulated populations with different sizes and correctness gaps, using 12 seeds per condition. The answer-key control reaches 1.000 [0.940, 1.000] all-variant item success (Wilson interval). In simulated populations of eight agents, a designated leader's mean bootstrap first-place share changes from 0.150 [0.090, 0.222] at equal ability to 0.644 [0.568, 0.728] at the largest gap. These are confidence intervals across simulation seeds. Exact ties retain high rank agreement while offering no unique winner. The contribution is an inspectable ranking diagnostic and controlled validation, not a learned-model leaderboard or a new estimator.",
+  "authors": [
+    {
+      "name": "Pooria Arab",
+      "affiliation": "Independent researcher",
+      "orcid": "https://orcid.org/0009-0005-9964-6841"
+    }
+  ],
+  "license": "CC-BY-4.0",
+  "keywords": [
+    "ranking stability",
+    "bootstrap",
+    "prompt sensitivity",
+    "benchmark",
+    "simulation"
+  ],
+  "code_url": "https://github.com/pooriaarab/benchmark-ranking-stability",
+  "artifact_name": "ranking-stability-paper.pdf"
+}

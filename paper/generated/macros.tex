@@ -1,0 +1,21 @@
+\newcommand{\PaperTitle}{Benchmark Ranking Stability: Separating Score Order from Evidence}
+\newcommand{\PaperAbstract}{A benchmark score orders systems without showing how that order depends on the evaluation sample. Benchmark Ranking Stability combines paired item resampling, repeated runs, and prompt-specific ranks. Its public suite contains 60 reasoning items across 6 families, each with 5 prompts. We run 9 scripted or mock controls twice through the actual evaluator. We also evaluate simulated populations with different sizes and correctness gaps, using 12 seeds per condition. The answer-key control reaches 1.000 [0.940, 1.000] all-variant item success (Wilson interval). In simulated populations of eight agents, a designated leader's mean bootstrap first-place share changes from 0.150 [0.090, 0.222] at equal ability to 0.644 [0.568, 0.728] at the largest gap. These are confidence intervals across simulation seeds. Exact ties retain high rank agreement while offering no unique winner. The contribution is an inspectable ranking diagnostic and controlled validation, not a learned-model leaderboard or a new estimator.}
+\newcommand{\AuthorOrcid}{0009-0005-9964-6841}
+\newcommand{\RivalProb}{0.550}
+\newcommand{\Items}{60}
+\newcommand{\Tasks}{300}
+\newcommand{\Variants}{5}
+\newcommand{\Families}{6}
+\newcommand{\Seeds}{12}
+\newcommand{\Runs}{3}
+\newcommand{\Draws}{500}
+\newcommand{\Level}{95}
+\newcommand{\SimReports}{1512}
+\newcommand{\PolicyCount}{9}
+\newcommand{\PolicyExecutions}{18}
+\newcommand{\ApiCost}{0}
+\newcommand{\AblationShare}{0.051 [0.020, 0.080]}
+\newcommand{\AblationWidth}{-0.167 [-0.417, 0.000]}
+\newcommand{\TieTau}{1.000}
+\newcommand{\TieRank}{1.500}
+\newcommand{\TieShare}{0.500}
